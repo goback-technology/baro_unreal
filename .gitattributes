@@ -1,0 +1,27 @@
+# ============================================================
+#  baro_unreal — 라인엔딩 정규화 + (향후) LFS 대비
+#  저장소에는 LF 로 저장, 체크아웃 시 OS 기본(Windows=CRLF).
+#  머신/협업 간 라인엔딩 diff·경고를 방지한다.
+# ============================================================
+
+* text=auto
+
+# 텍스트 소스 (명시)
+*.cpp       text
+*.h         text
+*.cs        text
+*.ini       text
+*.md        text
+*.uproject  text
+*.uplugin   text
+*.vsconfig  text
+
+# UE 바이너리 에셋 — 현재 code-only 라 추적하지 않지만,
+# 향후 Git LFS 도입 시 이 선언에 `filter=lfs diff=lfs merge=lfs` 를 붙일 지점.
+*.uasset    binary
+*.umap      binary
+*.upk       binary
+*.udk       binary
+*.png       binary
+*.jpg       binary
+*.tga       binary
