@@ -8,6 +8,8 @@
 #include "Interfaces/IPv4/IPv4Endpoint.h"
 #include "Interfaces/IPv4/IPv4Address.h"
 #include "HAL/RunnableThread.h"
+#include "HAL/Event.h"
+#include "HAL/PlatformProcess.h"
 #include "Misc/ScopeLock.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogMjpegStream, Log, All);
@@ -31,6 +33,9 @@ bool FMjpegStreamServer::StartServer(int32 Port, int32 InFps)
 	Fps = FMath::Clamp(InFps, 1, 60);
 	bStop = false;
 
+	// auto-reset: 송신 중 도착한 프레임도 다음 Wait 가 즉시 리턴해 놓치지 않는다.
+	NewFrameEvent = FPlatformProcess::GetSynchEventFromPool(false);
+
 	const FIPv4Endpoint Endpoint(FIPv4Address::Any, static_cast<uint16>(Port));
 	// 짧은 폴링 간격으로 accept 응답성 확보.
 	Listener = new FTcpListener(Endpoint, FTimespan::FromMilliseconds(200));
@@ -51,6 +56,10 @@ bool FMjpegStreamServer::StartServer(int32 Port, int32 InFps)
 void FMjpegStreamServer::StopServer()
 {
 	bStop = true;
+	if (NewFrameEvent)
+	{
+		NewFrameEvent->Trigger(); // 대기 중인 워커를 즉시 깨워 종료
+	}
 
 	// 리스너 먼저 정지(신규 accept 차단). 소멸자가 accept 스레드 kill + listen 소켓 정리.
 	if (Listener)
@@ -64,6 +73,12 @@ void FMjpegStreamServer::StopServer()
 		Thread->WaitForCompletion();
 		delete Thread;
 		Thread = nullptr;
+	}
+
+	if (NewFrameEvent)
+	{
+		FPlatformProcess::ReturnSynchEventToPool(NewFrameEvent);
+		NewFrameEvent = nullptr;
 	}
 
 	CloseAllClients();
@@ -86,8 +101,29 @@ bool FMjpegStreamServer::HandleConnection(FSocket* Socket, const FIPv4Endpoint& 
 
 void FMjpegStreamServer::UpdateFrame(const TArray<uint8>& Jpeg)
 {
-	FScopeLock F(&FrameLock);
-	LatestFrame = Jpeg;
+	{
+		FScopeLock F(&FrameLock);
+		LatestFrame = Jpeg;
+		++FrameSeq;
+	}
+	if (NewFrameEvent)
+	{
+		NewFrameEvent->Trigger();
+	}
+}
+
+int32 FMjpegStreamServer::GetClientCount() const
+{
+	int32 Count = 0;
+	{
+		FScopeLock C(&ClientsLock);
+		Count += Clients.Num();
+	}
+	{
+		FScopeLock P(&PendingLock);
+		Count += Pending.Num();
+	}
+	return Count;
 }
 
 bool FMjpegStreamServer::HasClients() const
@@ -155,8 +191,6 @@ uint32 FMjpegStreamServer::Run()
 		TEXT("Connection: close\r\n\r\n"),
 		kBoundary);
 
-	const float SleepSec = 1.f / FMath::Max(1, Fps);
-
 	while (!bStop)
 	{
 		// 1) 대기열 -> 활성 (중첩 락 없이)
@@ -172,58 +206,90 @@ uint32 FMjpegStreamServer::Run()
 			for (FSocket* S : NewOnes) { Clients.Add(FClient{ S, false }); }
 		}
 
-		// 2) 최신 프레임 스냅샷
+		// 2) 최신 프레임 + 시퀀스 스냅샷
 		TArray<uint8> Frame;
+		uint64 Seq = 0;
 		{
 			FScopeLock F(&FrameLock);
 			Frame = LatestFrame;
+			Seq = FrameSeq;
 		}
 
-		// 3) 각 클라이언트에 송신
+		// 3) 이 시퀀스를 아직 못 받은 클라이언트에만 송신 (중복 재전송 없음 —
+		//    페이싱은 producer 의 UpdateFrame 주기가 결정)
+		//    송신 중에는 ClientsLock 을 잡지 않는다: 블로킹 SendAll 이 락을 문 채 멈추면
+		//    게임스레드의 HasClients() 가 같이 멈춰 sim 전체가 얼어붙는다(느린 원격 브라우저).
+		//    Clients 의 구조 변경(추가/제거)은 이 워커 스레드만 수행하므로 락은 원소
+		//    접근/변경 순간만 잡으면 HasClients()/CloseAllClients() 와 안전하다.
 		if (Frame.Num() > 0)
 		{
 			const FString PartHdr = FString::Printf(
 				TEXT("--%s\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n"),
 				kBoundary, Frame.Num());
 
-			FScopeLock C(&ClientsLock);
-			for (int32 i = Clients.Num() - 1; i >= 0; --i)
+			int32 Count = 0;
 			{
-				FClient& Cl = Clients[i];
+				FScopeLock C(&ClientsLock);
+				Count = Clients.Num();
+			}
+			for (int32 i = Count - 1; i >= 0; --i)
+			{
+				FClient Snapshot;
+				{
+					FScopeLock C(&ClientsLock);
+					Snapshot = Clients[i];
+				}
+				if (Snapshot.SentSeq == Seq)
+				{
+					continue;
+				}
 				bool bOk = true;
 
-				if (!Cl.bHeaderSent)
+				if (!Snapshot.bHeaderSent)
 				{
 					FTCHARToUTF8 H(*HeaderStr);
-					bOk = SendAll(Cl.Socket, reinterpret_cast<const uint8*>(H.Get()), H.Length());
-					Cl.bHeaderSent = true;
+					bOk = SendAll(Snapshot.Socket, reinterpret_cast<const uint8*>(H.Get()), H.Length());
 				}
 				if (bOk)
 				{
 					FTCHARToUTF8 PH(*PartHdr);
-					bOk = SendAll(Cl.Socket, reinterpret_cast<const uint8*>(PH.Get()), PH.Length());
+					bOk = SendAll(Snapshot.Socket, reinterpret_cast<const uint8*>(PH.Get()), PH.Length());
 				}
 				if (bOk)
 				{
-					bOk = SendAll(Cl.Socket, Frame.GetData(), Frame.Num());
+					bOk = SendAll(Snapshot.Socket, Frame.GetData(), Frame.Num());
 				}
 				if (bOk)
 				{
 					const uint8 Trailer[2] = { '\r', '\n' };
-					bOk = SendAll(Cl.Socket, Trailer, 2);
+					bOk = SendAll(Snapshot.Socket, Trailer, 2);
 				}
 
-				if (!bOk)
+				FScopeLock C(&ClientsLock);
+				if (bOk)
+				{
+					Clients[i].bHeaderSent = true;
+					Clients[i].SentSeq = Seq;
+				}
+				else
 				{
 					UE_LOG(LogMjpegStream, Log, TEXT("[MJPEG] 클라이언트 연결 종료(송신 실패) -> 정리"));
-					DestroyClientSocket(Cl.Socket);
+					DestroyClientSocket(Clients[i].Socket);
 					Clients.RemoveAt(i);
 				}
 			}
 		}
 
-		// 4) Fps 페이싱
-		FPlatformProcess::Sleep(SleepSec);
+		// 4) 새 프레임(또는 정지)까지 대기 — 고정 sleep 과 달리 송신 시간이 주기를 깎지 않는다.
+		//    타임아웃은 신규 accept(Pending) 흡수용 폴링 간격.
+		if (NewFrameEvent)
+		{
+			NewFrameEvent->Wait(FTimespan::FromMilliseconds(200));
+		}
+		else
+		{
+			FPlatformProcess::Sleep(0.2f);
+		}
 	}
 
 	return 0;
@@ -232,4 +298,8 @@ uint32 FMjpegStreamServer::Run()
 void FMjpegStreamServer::Stop()
 {
 	bStop = true;
+	if (NewFrameEvent)
+	{
+		NewFrameEvent->Trigger();
+	}
 }

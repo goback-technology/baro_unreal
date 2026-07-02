@@ -38,6 +38,11 @@ struct FHucomsChannel
 	// --- 연속 MJPEG 스트림 서버(RTSP 브리지 입력) ---
 	FMjpegStreamServer* Stream = nullptr;
 	float StreamAccum = 0.f;
+
+	// --- 스트림 송신 fps 실측 (1초 창) — HUD 표시용 ---
+	float FpsWindowAccum = 0.f;
+	int32 FpsWindowFrames = 0;
+	float MeasuredStreamFps = 0.f;
 };
 
 /**
@@ -188,6 +193,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Hucoms")
 	int32 GetChannelCount() const { return Channels.Num(); }
 
+	/** 채널별 상태 한 줄씩(카메라·포트·실측 스트림 fps·클라이언트 수) — sim HUD 표시용. */
+	TArray<FString> GetChannelStatusLines() const;
+
 private:
 	bool bServersStarted = false;
 	bool bAutoSpawnAttempted = false;
@@ -216,6 +224,15 @@ private:
 	bool HandleCapabilityPtz(FHucomsChannel& Ch, const FHttpServerRequest& Req, const FHttpResultCallback& OnComplete);
 	bool HandleJpeg(FHucomsChannel& Ch, const FHttpServerRequest& Req, const FHttpResultCallback& OnComplete);
 	bool HandleMjpeg(FHucomsChannel& Ch, const FHttpServerRequest& Req, const FHttpResultCallback& OnComplete);
+
+	/**
+	 * 캡처 튜닝(노출/대비/JPEG품질/워밍업/해상도) 조회·설정 — Hucoms 실기 프로토콜에는 없는
+	 * 시뮬레이터 전용 디버그 API. 쿼리 파라미터로 준 항목만 갱신하고, 항상 현재 전체 상태를
+	 * JSON으로 반환한다. 값은 전 채널(카메라) 공유 — 어느 포트로 호출해도 동일하게 적용된다
+	 * (RenderSnapshotJpeg 가 이 subsystem 멤버를 매 캡처마다 읽으므로 재빌드 불필요, 즉시 반영).
+	 * UI는 이 서브시스템에 두지 않는다 — webUI(baro_calory) 쪽 책임, 여긴 이미지 생성만.
+	 */
+	bool HandleTuning(FHucomsChannel& Ch, const FHttpServerRequest& Req, const FHttpResultCallback& OnComplete);
 
 	// --- 명령 적용 (채널별) ---
 	void ApplyGoPtz(FHucomsChannel& Ch, const FHttpServerRequest& Req);

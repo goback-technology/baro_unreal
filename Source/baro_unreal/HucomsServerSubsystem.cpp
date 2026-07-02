@@ -17,6 +17,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
+#include "Camera/CameraComponent.h"
+#include "ContentStreaming.h"   // IStreamingManager — CCTV 시점을 텍스처 스트리머에 등록
 
 DEFINE_LOG_CATEGORY_STATIC(LogHucomsSim, Log, All);
 
@@ -251,6 +253,7 @@ void UHucomsServerSubsystem::StartServers()
 		BindGet(TEXT("/cgi-bin/control/capabilityptz.cgi"), &UHucomsServerSubsystem::HandleCapabilityPtz);
 		BindGet(TEXT("/cgi-bin/image/jpeg.cgi"),            &UHucomsServerSubsystem::HandleJpeg);
 		BindGet(TEXT("/cgi-bin/image/mjpeg.cgi"),           &UHucomsServerSubsystem::HandleMjpeg);
+		BindGet(TEXT("/api/tuning"),                        &UHucomsServerSubsystem::HandleTuning);
 
 		// 연속 MJPEG 스트림 서버(채널별 포트).
 		if (bEnableMjpegStream)
@@ -351,24 +354,60 @@ void UHucomsServerSubsystem::Tick(float DeltaTime)
 
 		MirrorChannel(Ch);
 
+		// CCTV 시점을 텍스처 스트리머에 등록 — 스트리머는 플레이어 뷰만 시점으로 쓰고
+		// SceneCapture 뷰는 등록하지 않으므로(UE5.8 GameViewportClient.cpp:1913 확인),
+		// 줌으로 당긴 원거리 텍스처가 저해상도 mip 으로 뭉개진다. 카메라 위치 + 현재 줌
+		// FOV(FOVScreenSize = 폭/tan(HFOV/2))를 매 틱 등록해 mip 이 CCTV 기준으로 올라온다.
+		if (const APTZCamera* Cam = Ch.Camera.Get())
+		{
+			if (Cam->CameraComp)
+			{
+				const float HalfHFovRad = FMath::DegreesToRadians(FMath::Max(1.f, Cam->CameraComp->FieldOfView)) * 0.5f;
+				const float ScreenSize = static_cast<float>(FMath::Max(StreamWidth, SnapshotWidth));
+				IStreamingManager::Get().AddViewInformation(
+					Cam->CameraComp->GetComponentLocation(), ScreenSize,
+					ScreenSize / FMath::Max(FMath::Tan(HalfHFovRad), 0.01f));
+			}
+		}
+
 		// 연속 MJPEG: 클라이언트가 있을 때만 StreamFps 로 캡처(없으면 렌더 비용 0).
 		if (Ch.Stream && Ch.Stream->HasClients())
 		{
 			Ch.StreamAccum += DeltaTime;
+			Ch.FpsWindowAccum += DeltaTime;
 			if (Ch.StreamAccum >= Interval)
 			{
-				Ch.StreamAccum = 0.f;
+				// 잔여 시간을 보존해야 실효 fps 가 StreamFps 에 수렴한다(0 리셋은 게임 틱 경계로
+				// 양자화되어 항상 목표 미달). 게임 fps < StreamFps 인 구간에서 부채가 무한 누적되어
+				// 히치 후 따라잡기 폭주하지 않도록 한 프레임치로 클램프.
+				Ch.StreamAccum = FMath::Min(Ch.StreamAccum - Interval, Interval);
 				if (UPTZCaptureComponent* Cap = ResolveCapture(Ch.Camera.Get()))
 				{
 					TArray64<uint8> Jpeg;
-					if (Cap->CaptureJpeg(StreamWidth, StreamHeight, StreamJpegQuality, Jpeg) && Jpeg.Num() > 0)
+					// 스냅샷(jpeg.cgi)과 동일한 노출/대비 보정을 연속 스트림에도 적용 —
+					// 안 그러면 튜닝 슬라이더를 움직여도 이 경로를 보는 화면은 안 바뀐다.
+					if (Cap->CaptureJpeg(StreamWidth, StreamHeight, StreamJpegQuality, Jpeg, /*WarmupFrames=*/0, CaptureExposureBias, CaptureContrast) && Jpeg.Num() > 0)
 					{
 						TArray<uint8> Frame;
 						Frame.Append(Jpeg.GetData(), IntCastChecked<int32>(Jpeg.Num()));
 						Ch.Stream->UpdateFrame(Frame);
+						++Ch.FpsWindowFrames;
 					}
 				}
 			}
+			// 1초 창으로 실측 송신 fps 갱신 (HUD 표시용)
+			if (Ch.FpsWindowAccum >= 1.f)
+			{
+				Ch.MeasuredStreamFps = Ch.FpsWindowFrames / Ch.FpsWindowAccum;
+				Ch.FpsWindowAccum = 0.f;
+				Ch.FpsWindowFrames = 0;
+			}
+		}
+		else
+		{
+			Ch.MeasuredStreamFps = 0.f;
+			Ch.FpsWindowAccum = 0.f;
+			Ch.FpsWindowFrames = 0;
 		}
 	}
 }
@@ -376,6 +415,28 @@ void UHucomsServerSubsystem::Tick(float DeltaTime)
 TStatId UHucomsServerSubsystem::GetStatId() const
 {
 	RETURN_QUICK_DECLARE_CYCLE_STAT(UHucomsServerSubsystem, STATGROUP_Tickables);
+}
+
+TArray<FString> UHucomsServerSubsystem::GetChannelStatusLines() const
+{
+	TArray<FString> Lines;
+	for (const TSharedPtr<FHucomsChannel>& ChPtr : Channels)
+	{
+		const FHucomsChannel& Ch = *ChPtr;
+		const FString Name = Ch.Camera.IsValid() ? Ch.Camera->GetName() : TEXT("(카메라 없음)");
+		const int32 Clients = Ch.Stream ? Ch.Stream->GetClientCount() : 0;
+		if (Clients > 0)
+		{
+			Lines.Add(FString::Printf(TEXT("%s  http:%d  mjpeg:%d  ▶ %.1f fps  (클라이언트 %d)"),
+				*Name, Ch.HttpPort, Ch.MjpegPort, Ch.MeasuredStreamFps, Clients));
+		}
+		else
+		{
+			Lines.Add(FString::Printf(TEXT("%s  http:%d  mjpeg:%d  — 대기 (클라이언트 없음, 캡처 0)"),
+				*Name, Ch.HttpPort, Ch.MjpegPort));
+		}
+	}
+	return Lines;
 }
 
 //======================================================================================
@@ -573,6 +634,25 @@ bool UHucomsServerSubsystem::HandleMjpeg(FHucomsChannel& Ch, const FHttpServerRe
 	return true;
 }
 
+bool UHucomsServerSubsystem::HandleTuning(FHucomsChannel& /*Ch*/, const FHttpServerRequest& Req, const FHttpResultCallback& OnComplete)
+{
+	// 전 채널 공유 값(RenderSnapshotJpeg 가 이 subsystem 멤버를 매 캡처마다 읽음) — 준 항목만 갱신,
+	// 나머지는 유지. 클램프는 헤더의 UPROPERTY meta 범위와 동일(에디터 Details 클램프는 런타임엔
+	// 미적용이라 여기서 직접 강제 — 외부 HTTP 입력 경계이므로 검증 필요).
+	if (HasQ(Req, TEXT("exposureBias")))  { CaptureExposureBias  = FMath::Clamp(GetQFloat(Req, TEXT("exposureBias"), CaptureExposureBias), -4.f, 4.f); }
+	if (HasQ(Req, TEXT("contrast")))      { CaptureContrast      = FMath::Clamp(GetQFloat(Req, TEXT("contrast"), CaptureContrast), 0.5f, 3.0f); }
+	if (HasQ(Req, TEXT("jpegQuality")))   { JpegQuality           = FMath::Clamp(GetQInt(Req, TEXT("jpegQuality"), JpegQuality), 1, 100); }
+	if (HasQ(Req, TEXT("warmupFrames")))  { SnapshotWarmupFrames  = FMath::Clamp(GetQInt(Req, TEXT("warmupFrames"), SnapshotWarmupFrames), 0, 32); }
+	if (HasQ(Req, TEXT("width")))         { SnapshotWidth         = FMath::Clamp(GetQInt(Req, TEXT("width"), SnapshotWidth), 64, 7680); }
+	if (HasQ(Req, TEXT("height")))        { SnapshotHeight        = FMath::Clamp(GetQInt(Req, TEXT("height"), SnapshotHeight), 64, 4320); }
+
+	const FString Body = FString::Printf(
+		TEXT("{\"exposureBias\":%.3f,\"contrast\":%.3f,\"jpegQuality\":%d,\"warmupFrames\":%d,\"width\":%d,\"height\":%d}"),
+		CaptureExposureBias, CaptureContrast, JpegQuality, SnapshotWarmupFrames, SnapshotWidth, SnapshotHeight);
+	OnComplete(MakeText(Body, TEXT("application/json")));
+	return true;
+}
+
 //======================================================================================
 // Command application (채널별)
 //======================================================================================
@@ -616,8 +696,16 @@ void UHucomsServerSubsystem::ApplySetCenter(FHucomsChannel& Ch, const FHttpServe
 		PixelY = GetQFloat(Req, TEXT("center.pointy"), HucomsProtocol::FrameH * 0.5f);
 	}
 
+	// 델타 환산은 '현재 줌의 실효 FOV' 기준 — 광각 상수를 그대로 쓰면 화면상 같은 클릭
+	// 오프셋이 줌 배율만큼 과이동한다(예: 10x 줌에서 10배 오버슈트로 엉뚱한 곳을 조준).
+	// HFOV 는 실측 캘리브레이션 표(ZoomPosToHFov), VFOV 는 rectilinear 광학상 tan 비례 축소.
+	const float CurHFov = HucomsProtocol::ZoomPosToHFov(Ch.CurZoom, WideHFovDeg);
+	const float Zf      = HucomsProtocol::HFovToZoomFactor(CurHFov, WideHFovDeg);
+	const float CurVFov = FMath::RadiansToDegrees(2.f * FMath::Atan(
+		FMath::Tan(FMath::DegreesToRadians(WideVFovDeg) * 0.5f) / FMath::Max(Zf, KINDA_SMALL_NUMBER)));
+
 	int32 PanDeltaCd, TiltDeltaCd;
-	HucomsProtocol::PixelToDeltaCentideg(PixelX, PixelY, WideHFovDeg, WideVFovDeg, PanDeltaCd, TiltDeltaCd);
+	HucomsProtocol::PixelToDeltaCentideg(PixelX, PixelY, CurHFov, CurVFov, PanDeltaCd, TiltDeltaCd);
 
 	Ch.TgtPan  = HucomsProtocol::WrapPan(Ch.CurPan + PanDeltaCd);
 	// 실기 setcenter 규약(fov-convert.mjs ptzToWidePixel, cam-001 필드검증): 프레임에서 아래(y+)에

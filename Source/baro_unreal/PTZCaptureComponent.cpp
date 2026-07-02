@@ -89,6 +89,11 @@ bool UPTZCaptureComponent::CaptureJpeg(int32 Width, int32 Height, int32 Quality,
 	// (Hucoms 서버가 MirrorToCamera 에서 카메라 FOV 를 HFOV(zoompos) 로 맞춰둔다.)
 	CaptureComp->FOVAngle = OwnerCam->CameraComp->FieldOfView;
 
+	// 줌 보정 LOD: 메시 LOD 는 화면 크기 기반이라 줌(좁은 FOV)을 반영하지만, 폴리지/인스턴스
+	// 컬링·페이드는 순수 거리 기반이라 줌을 모른다. 캡처 뷰의 LOD 거리 계산을 줌 배율만큼
+	// 당겨(팩터 < 1) 원거리 소품이 저LOD/컬링으로 뭉개지는 것을 막는다.
+	CaptureComp->LODDistanceFactor = FMath::Clamp(CaptureComp->FOVAngle / FMath::Max(1.f, OwnerCam->BaseFOV), 0.05f, 1.f);
+
 	// 톤 정합: SceneCapture 자동노출/대비가 뷰포트와 달라 "희게 뜨는"(과노출+저대비) 것을 보정한다.
 	// 뷰포트 실측(mean 108, contrast 72) 대비 캡처(159, 47)가 밝고 밋밋 → 노출 낮추고 대비 올림.
 	CaptureComp->PostProcessSettings.bOverride_AutoExposureBias = true;
