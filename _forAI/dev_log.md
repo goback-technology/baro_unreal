@@ -44,6 +44,14 @@
   - 검증 자산: `baro_calory/apps/backend-core/public/compare.html`(before/after 슬라이더 + 선명도/톤 지표표 + 뷰포트 기준). 여정: 원본(878)→선명수정(1358)→최종(2475).
   - **교훈(핵심)**: 선명도/톤은 **반드시 실측**하라 — 라플라시안 분산(선명) + 휘도 히스토그램(톤), PowerShell+System.Drawing(이 환경의 Python은 Store 스텁이라 못 씀, ImageMagick 없음). "선명해 보인다"(자축)도, 그럴듯한 이론(워밍업 수렴)도 데이터로 반증됐다. 뷰포트 대비 시 **FOV 정합 필수**. 전역 메모리 `ue-scenecapture-sharpness`에 확정 기록.
 
+- 2026-07-02 (저녁): **스트림 30fps + 미니멀 sim 실행 모드 + 줌 인식 setcenter + 원거리 화질 (baro_calory v0.2.0 대응).**
+  - **스트림 파이프라인 30fps 실측 달성**: `StreamFps=30`(DefaultGame.ini — 코드 기본 15는 24fps 목표 미달). Tick accumulator `=0` 리셋→**잔여 보존+1프레임 클램프**(틱 양자화로 목표 미달하던 것). `FMjpegStreamServer`를 **프레임 시퀀스 게이트 + auto-reset FEvent 대기**로 전환(중복 재전송·고정 sleep 제거 — 페이싱은 producer가 결정, 송신 시간이 주기를 안 깎음). **송신 중 ClientsLock 해제**(블로킹 SendAll이 락을 물면 게임스레드 `HasClients()`가 같이 멈춰 sim 전체 프리즈 — 느린 원격 브라우저로 재현 가능한 major, 적대 리뷰 발견). 수렴 실측 29.9~30.2fps(720p q80).
+  - **BaroSim 미니멀 실행 모드**(신규 `BaroSimGameMode`/`BaroSimPlayerController`/`BaroSimHUD`): standalone은 카메라 서버가 목적 — SpectatorPawn(구체 폰 제거), **`bDisableWorldRendering=true`**(메인 뷰포트 월드 렌더 OFF; SceneCapture는 자체 씬 렌더라 CCTV 무영향 — "오프스크린 전용"의 실현), `t.MaxFPS 60`, 커서 항상 표시(`DefaultInput.ini` NoCapture/DoNotLock), **ESC 종료**, HUD에 타이틀·채널별 실측 스트림 fps·클라이언트 수·게임 틱 fps 표시. `GameDefaultMap=/Game/simulator/LV_Park_sim_01`, `GlobalDefaultGameMode` 지정. PIE는 월드 렌더 유지(게이트: WorldType==Game).
+  - **원거리 화질(줌 시 텍스처 뭉개짐) 원인 확정+수정**: UE5.8 엔진 소스 확인 결과 **텍스처 스트리머는 게임 뷰포트 뷰만 시점으로 등록**(GameViewportClient.cpp:1913→AddStreamingViewInfo), SceneCapture는 미등록 → mip 기준이 "투명 스펙테이터 90° 뷰"였다. 수정: Tick에서 채널마다 `IStreamingManager::AddViewInformation`(카메라 위치+**현재 줌 FOV**, 폭=max(Stream,Snapshot)) 등록 + `CaptureComp->LODDistanceFactor=현재HFOV/광각HFOV`(거리 기반 폴리지 컬링/페이드는 FOV 무시라 줌 보정 필요). 신규 줌 지점은 mip 스트리밍 1~2초 지연 정상.
+  - **setcenter 줌 인식**: `ApplySetCenter`가 `Ch.CurZoom` 무시하고 광각 상수로 델타 환산 → 줌 시 배율만큼 과이동(10x에서 10배). `ZoomPosToHFov`로 현재 실효 FOV 환산(VFOV는 tan 비례). 검증: 줌 6000 클릭 → 반환 델타(pan -2.61°/tilt -1.24°)가 계산값과 소수점 일치, 표적 중앙 안착 ±0.4°. **호밍(줌인 반복 센터링) 안정성에도 직결.** baro_calory fake mock도 동일 모델로 정렬(`fov-convert.zoomPosToHFov` — HucomsProtocol.h와 같은 표, 동기화 유지).
+  - **톤 "탄 느낌" 실측**: 구운 `대비 1.6`이 흰 차+직사광에서 하이라이트 클리핑 1.9%/암부 뭉개짐 12.0%로 세피아 톤(대비 1.0: 0.3%/2.5%). **`CaptureContrast=1.2`로 ini 베이크**(노출 -0.7은 mean~150 적정, 무죄). 차 옆면 잔여 누런 얼룩은 Lumen 바운스+에셋 먼지 레이어(물리적 타당, 유지). ※ 2026-07-02 오전의 "대비 1.6 확정"을 실측으로 **개정**.
+  - **함정 2건**: ① 에디터 백그라운드 스로틀(Use Less CPU when in Background)로 포커스 잃으면 게임 틱 ~3.3fps → 스트림도 3.3fps. 성능 테스트는 standalone `-game` 필수(스탠드얼론은 백그라운드 스로틀 없음, 실측 확인). ② Live Coding 활성(에디터/게임 실행) 중엔 CLI 빌드 거부 — 새 UCLASS는 어차피 풀 리빌드 필요.
+
 ## PTZ 좌표·부호 규약 (Canonical — 진실의 출처)
 
 > ⚠️ **다른 세션 필독.** 틸트 부호는 과거 여러 번 반복해서 틀렸다(mock→sim→UI로 전파). **새 코드는 `fake-camera` mock을 베끼지 말고 이 표를 따를 것.**
