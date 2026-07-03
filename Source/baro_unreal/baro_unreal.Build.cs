@@ -10,10 +10,9 @@ public class baro_unreal : ModuleRules
 	
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
 
-		// HTTP/Json: baro_vla 추론 서버 통신 + 응답 파싱 (CenteringClientComponent)
-		// HTTPServer: 인엔진 Hucoms HTTP CGI 서버 (UHucomsServerSubsystem) - 실기 행세
-		// Sockets/Networking: 연속 MJPEG 스트리밍 서버 (FMjpegStreamServer) - RTSP 브리지 입력
-		PrivateDependencyModuleNames.AddRange(new string[] { "HTTP", "Json", "HTTPServer", "Sockets", "Networking" });
+		// CCTV 시뮬 C++ 는 baroCCTVSimulator 플러그인으로 이관됨 (HTTP/Json/HTTPServer/Sockets/
+		// Networking 등 관련 의존성도 플러그인이 자체 보유). 이 게임 모듈은 이제 부트만 담는다.
+		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

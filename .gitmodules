@@ -1,0 +1,3 @@
+[submodule "Plugins/baroCCTVSimulator"]
+	path = Plugins/baroCCTVSimulator
+	url = https://github.com/gbox3d/baroCCTVSimulator.git
