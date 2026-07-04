@@ -30,6 +30,9 @@
 - [ ] **다음(성능, 4캠 동시 24fps 필요 시)**: JPEG 인코딩 오프스레드(UE::Tasks) → 블로킹 ReadPixels→비동기 FRHIGPUTextureReadback → jpeg.cgi 스냅샷 캐시. (근거: baro_calory dev_log 2026-07-02 저녁 진단)
 - [ ] PIE 일시정지/캡처 실패 시 스트림 keepalive 없음(클라이언트 무프레임 대기) — 소비자 read-timeout 이슈가 실제로 생기면 idle 재전송 추가.
 - [ ] 나머지 LV_Park 레벨(02~08)에도 PTZ 배치 적용(필요 시).
+- [x] **RYU 플러그인-프리 이관 + sim_01 빌딩 스태틱 베이크 완료** (2026-07-04): RYU 콘텐츠 1,096개 → `/Game/_RYU_Portable` 이관 + 리다이렉터 정리(7레벨 RYU참조 0) + sim_01 빌딩 6개 → `SM_SM_sim01_Buildings` 베이크(RYU콘텐츠0·/Script/RYU0). 절차는 memo `RYU 플러그인-프리 베이크` 참조.
+- [ ] **나머지 RYU 레벨 빌딩 베이크** (동일 레시피): `LV_Park_01 / 04 / 07_A`, `Unity/LV_Park_01_U / 04_U`. (sim_02는 RYU無.)
+- [ ] **전 레벨 베이크 완료 후에만** uproject서 RYU 플러그인 최종 disable → 프로젝트 전체 플러그인-프리. ⚠️ 그전에 끄면 미베이크 레벨 빌딩 상세 소실.
 
 ## Structure decisions
 
@@ -44,3 +47,4 @@
 - baro_world 5.8 소스 이식 시 모듈명 하드코딩(`BARO_WORLD_API`, 로그 카테고리, config 섹션
   `[/Script/baro_world.HucomsServerSubsystem]`) 누락 → 런타임/config 미적용.
 - 두 프로젝트가 같은 UE 5.8인지·에셋 버전 호환성.
+- **RYU 빌딩은 PCG + `/Script/RYU` C++로 매 로드 생성되는 transient** — 콘텐츠 이관만으론 플러그인-프리 불가. 반드시 **빌딩 스태틱 베이크 후** 플러그인 제거(순서 틀리면 빌딩 상세 소실). 현재 sim_01만 베이크 완료 — 나머지 레벨 미베이크 상태서 플러그인 끄면 그 레벨들 빌딩 깨짐.

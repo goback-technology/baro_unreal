@@ -51,11 +51,6 @@
 			"Enabled": true
 		},
 		{
-			"Name": "RYUKoreaBuilidngCreator",
-			"Enabled": true,
-			"MarketplaceURL": "com.epicgames.launcher://ue/Fab/product/e69d4a87-fe31-4ae7-accf-b30234242cd7"
-		},
-		{
 			"Name": "baroCCTVSimulator",
 			"Enabled": true
 		}
