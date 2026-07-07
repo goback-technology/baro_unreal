@@ -13,6 +13,7 @@ Build/
 DerivedDataCache/
 Intermediate/
 Saved/
+Packaged/
 *.VC.db
 *.VC.opendb
 *.opensdf

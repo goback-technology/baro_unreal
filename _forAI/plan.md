@@ -33,6 +33,13 @@
 - [x] **RYU 플러그인-프리 이관 + sim_01 빌딩 스태틱 베이크 완료** (2026-07-04): RYU 콘텐츠 1,096개 → `/Game/_RYU_Portable` 이관 + 리다이렉터 정리(7레벨 RYU참조 0) + sim_01 빌딩 6개 → `SM_SM_sim01_Buildings` 베이크(RYU콘텐츠0·/Script/RYU0). 절차는 memo `RYU 플러그인-프리 베이크` 참조.
 - [ ] **나머지 RYU 레벨 빌딩 베이크** (동일 레시피): `LV_Park_01 / 04 / 07_A`, `Unity/LV_Park_01_U / 04_U`. (sim_02는 RYU無.)
 - [ ] **전 레벨 베이크 완료 후에만** uproject서 RYU 플러그인 최종 disable → 프로젝트 전체 플러그인-프리. ⚠️ 그전에 끄면 미베이크 레벨 빌딩 상세 소실.
+- [x] **고정 카메라 모드** = `APTZCamera::bFixedMode` 옵션(별도 플러그인 대신 PTZ 특수케이스). CLI 풀 리빌드 완료. (2026-07-06)
+- [x] **sim_01/02/03 CCTV 폴 자식 배치**(`BP_Pole` 자식, z+600, pitch −20; 폴수=카메라수). 기존 `BP_Camera` 제거. (2026-07-06)
+- [x] **sim_03 빌딩 베이크**(`LV_Park_03` → `SM_sim03_buildings`, RYU참조 0) + 콜리전 제거(내비 부하 해소). (2026-07-06)
+- [x] **CLI 패키징 + Win64 빌드·실행검증**: `Scripts/package.ps1`, sim_01 단독 Development 3.4GB, Hucoms 4포트·HTTP 응답 검증 통과. (2026-07-06)
+- [ ] **sim_03 병합메시 Nanite 불가**(144 머티섹션 > 한계) — 필요 시 Merge Materials=on 재병합. VSM 그림자 경고 잔존(콜리전 제거로 부하는 이미 해소).
+- [ ] **우분투(Linux) 빌드**: 툴체인 `v26_clang-20.1.8-rockylinux8` 설치 후 `./Scripts/package.ps1 -Platform Linux`. 코드/플러그인 준비완료(소켓 크로스플랫폼). 실행엔 GPU+Vulkan 필요. (memo/전역 `baro-unreal-packaging-cli`.)
+- [ ] **원격 제어**(다른 호스트) 필요 시 HTTP 제어 포트 `127.0.0.1`→`0.0.0.0` 바인딩 조정(스트림은 이미 0.0.0.0).
 
 ## Structure decisions
 
