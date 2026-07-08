@@ -7,6 +7,10 @@
 
 ## Entries
 
+- 2026-07-08: **씬 제어 슬롯 라벨 계약 + 플러그인 v0.1.1 반영.**
+  - `baroCCTVSimulator` 플러그인의 `/scene/slots` 응답에 안정 ID(`id=GetName()`)와 에디터 표시명(`label=GetActorLabel()`)을 함께 내려주도록 정리. 웹 UI는 `label || id`를 표시하고 숫자 인식 natural sort로 `BP_ParkingSlot1,2,3,...10` 순서를 유지한다.
+  - 프론트가 `BP_ParkingSlot_C_*` 런타임 이름을 가공하거나 하드코딩하지 않도록 계약을 문서화. 관련 API 문서 `docs/scene-control-api.md` 기준 버전을 플러그인 **v0.1.1**로 갱신.
+  - 에디터 종료 후 `Build.bat baro_unrealEditor Win64 Development -Project=...\baro_unreal.uproject -WaitMutex -NoHotReload`로 플러그인 포함 빌드 성공 확인.
 - 2026-07-01: `_forAI/` 문서 세트 초기 생성 (forai-scaffold). `baro_unreal`은 신규 UE 5.8 C++ 프로젝트
   (Source에 CCTV 코드 없음, 기본 레벨 test01, MCP 서버 활성).
   `plan.md`에 목표 기록 — parking_area 주차장 레벨(LV_Park_*) 이관 + baro_world 5.8 CCTV 시뮬레이터 이식.

@@ -29,6 +29,7 @@
 - 서버 자동기동: `UHucomsServerSubsystem`(UTickableWorldSubsystem) — `OnWorldBeginPlay`에서 Hucoms HTTP CGI 라우터 기동(Game/PIE), 기본 포트 8081. Tick에서 PTZ 모터 슬루 + 카메라 미러 + MJPEG 캡처.
 - `APTZCamera` — Pan/Tilt/Zoom 짐벌 액터(LV_Park_01에 `PTZ_Cam_01~04` 배치됨). `UPTZCaptureComponent`가 SceneCapture→JPEG.
 - `UCenteringClientComponent` — baro_vla 추론 서버 관측 클라이언트(번호판 검출).
+- `Plugins/baroCCTVSimulator/Source/.../SceneControlSubsystem.*` — `/scene/*` 런타임 씬 제어 API. 주차면 슬롯은 `id=GetName()`, `label=GetActorLabel()`을 함께 노출한다. 플러그인 `VersionName` 현재 **0.1.1**.
 - 상세 프로토콜/단위/기하는 baro_world 5.8 `_forAI/memo.md` 참고(동일 계약).
 
 ## Build and validation commands

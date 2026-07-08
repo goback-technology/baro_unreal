@@ -34,6 +34,8 @@
 
 - **setcenter = 줌 인식 LINEAR 모델**: 델타 = (픽셀오프셋/프레임) × **현재 zoompos의 실효 FOV** × 100. zoompos→HFOV는 cam-001 실측 표(`HucomsProtocol::ZoomPosToHFov` = baro_calory `fov-convert.zoomPosToHFov`와 동일 표 — **한쪽 수정 시 반드시 동기화**). VFOV는 tan 비례 축소. 광각 상수 고정은 줌 배율만큼 과이동(구버그).
 - PTZ 부호·틸트 규약은 dev_log의 "PTZ 좌표·부호 규약(Canonical)" 표를 따른다.
+- `/scene/slots` 표시명은 에디터 Actor Label이 기준이다. 응답은 `id=GetName()`(RPC 안정 식별자)과 `label=GetActorLabel()`(웹 표시명)을 모두 제공한다. 프론트에서 `BP_ParkingSlot_C_*` 이름을 임의 변환하지 않는다.
+- 플러그인 버전은 `baroCCTVSimulator.uplugin` `VersionName`이 단일 출처다. 현재 **0.1.1**이며 `/scene/catalog.pluginVersion`, 웹 `/simulator` 씬 카드, `BaroSimHUD`에 표시된다.
 
 ## 반복 금지
 

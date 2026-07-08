@@ -55,3 +55,6 @@ Content/
 #          단, 자체 CCTV 시뮬 플러그인(baroCCTVSimulator)은 submodule 로 추적한다.
 Plugins/*
 !Plugins/baroCCTVSimulator
+
+docs/outputs/
+.env

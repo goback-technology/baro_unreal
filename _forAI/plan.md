@@ -40,6 +40,7 @@
 - [ ] **sim_03 병합메시 Nanite 불가**(144 머티섹션 > 한계) — 필요 시 Merge Materials=on 재병합. VSM 그림자 경고 잔존(콜리전 제거로 부하는 이미 해소).
 - [ ] **우분투(Linux) 빌드**: 툴체인 `v26_clang-20.1.8-rockylinux8` 설치 후 `./Scripts/package.ps1 -Platform Linux`. 코드/플러그인 준비완료(소켓 크로스플랫폼). 실행엔 GPU+Vulkan 필요. (memo/전역 `baro-unreal-packaging-cli`.)
 - [ ] **원격 제어**(다른 호스트) 필요 시 HTTP 제어 포트 `127.0.0.1`→`0.0.0.0` 바인딩 조정(스트림은 이미 0.0.0.0).
+- [x] **씬 제어 슬롯 라벨 계약 정리**: `/scene/slots`가 `id=GetName()` + `label=GetActorLabel()`을 제공, baro_calory 웹은 `label || id` 표시 + natural sort. 플러그인 v0.1.1. (2026-07-08)
 
 ## Structure decisions
 

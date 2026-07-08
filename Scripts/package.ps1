@@ -32,21 +32,27 @@
 param(
     [ValidateSet("Win64", "Linux")] [string]$Platform = "Win64",
     [ValidateSet("Development", "Shipping")] [string]$Config = "Development",
-    [string]$Map = "/Game/simulator/LV_Park_sim_01",
+    [string]$Map = "",
     [switch]$Clean
 )
 
 $ErrorActionPreference = "Stop"
 
 # ---- 경로 ----
-$Engine  = "C:\Program Files\Epic Games\UE_5.8"
+. (Join-Path $PSScriptRoot "common.ps1")
+
+if ([string]::IsNullOrWhiteSpace($Map)) {
+    $Map = $BaroDefaultMap
+}
+
+$Engine  = $BaroEngine
 $UAT     = Join-Path $Engine "Engine\Build\BatchFiles\RunUAT.bat"
-$Root    = Split-Path -Parent $PSScriptRoot            # Scripts\ 의 부모 = 프로젝트 루트
-$Project = Join-Path $Root "baro_unreal.uproject"
+$Root    = $BaroRoot
+$Project = $BaroProject
 $Archive = Join-Path $Root "Packaged\$Platform"
 
-if (-not (Test-Path $UAT))     { throw "RunUAT 없음: $UAT  (엔진 경로를 확인하세요)" }
-if (-not (Test-Path $Project)) { throw "uproject 없음: $Project" }
+Assert-BaroFile -Path $UAT -Message "RunUAT 없음. .env의 UE_PATH를 확인하세요"
+Assert-BaroFile -Path $Project -Message "uproject 없음. PROJECT_FILE 또는 프로젝트 경로를 확인하세요"
 
 # ---- Linux 툴체인 사전 점검 ----
 if ($Platform -eq "Linux" -and [string]::IsNullOrEmpty($env:LINUX_MULTIARCH_ROOT)) {
@@ -62,6 +68,8 @@ UE 5.8용 clang 툴체인을 설치한 뒤 다시 실행하세요:
 $noDebug = ($Config -eq "Shipping")
 
 Write-Host "==================== baro_unreal 패키징 ====================" -ForegroundColor Cyan
+Write-Host (" UE_PATH  : {0}" -f $Engine)
+Write-Host (" Project  : {0}" -f $Project)
 Write-Host (" Platform : {0}" -f $Platform)
 Write-Host (" Config   : {0}" -f $Config)
 Write-Host (" Map      : {0}" -f $Map)
