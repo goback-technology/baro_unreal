@@ -7,6 +7,15 @@
 
 ## Entries
 
+- 2026-07-10: **주차면 라인 데칼 미렌더 사건 해결(Windows 완치) + 시연용 Shipping 빌드 + Linux(gb_210) 배포. 플러그인 v0.1.3.**
+  - **시연 빌드(보존본)**: `Packaged/Win64_Shipping_demo-20260710/baro_unreal.exe` — Shipping, 독립실행, 라인 렌더·차종 카탈로그·5포트 검증 완료. 이후 패키징이 `Packaged/Win64`를 덮어써도 이 폴더는 안전.
+  - **진범 = SceneCapture 전용 렌더의 VT(버추얼 텍스처) 페이지 스로틀.** 주차면 라인 데칼(`MI_Decal_Line_Road_White_02`, Megascans `M_MS_Decal_Material_VT` 계열)만 SVT 텍스처 3장을 샘플. VT 페이지는 렌더 픽셀 피드백으로 스트리밍되는데 이 sim은 `bDisableWorldRendering`+캡처 전용이라 피드백이 스로틀에 막힘 → 쿡 빌드에서 부팅 복불복(-RenderOffscreen은 상시)으로 라인만 투명. **수정 = `PTZCaptureComponent` 캡처 컴포넌트에 `bOverrideVirtualTextureThrottle=true`** (플러그인 0.1.2→**0.1.3**). 클린부팅 Dev 4/4 + Shipping 2/2 라인 정상으로 결정성 확인.
+  - **판별 결정타 2개**: ① Windows에서 `-dpcvars=r.VirtualTextures=0`으로 켜면 증상 100% 재현(=VT 인과 확정). ② 같은 pak 두 부팅에서 라인 유/무가 갈림(=쿡 아닌 런타임 확정). 수사 중 "7/7 umap 재저장이 고쳤다"는 결론은 **부팅 복권에 속은 오판**이었음(재저장 자체는 무해, 백업 `LV_Park_sim_01.umap.bak-20260709` 잔존 — 확인 후 삭제 가능).
+  - **디버깅 함정(중요)**: Shipping 게임 자식 프로세스명은 `baro_unreal-Win64-Shipping.exe` — `Stop-Process -Name baro_unreal`은 런처만 죽여 구 인스턴스가 포트(8081+/8095)를 쥔 채 테스트를 오염시킴(아침 "시뮬 4개" 사건). 부팅 테스트 전 `netstat` 리스너 0 확인 필수.
+  - **Linux(gb_210, 192.168.0.210)**: 0.1.3 pak 배포·가동 중(`~/baro_sim`, `nohup ./baro_unreal.sh -RenderOffscreen -log &`, 종료는 `pkill -f '[b]aro_unreal'`). 스폰·PTZ·MJPEG·카탈로그 전부 원격 정상. **단 주차면 라인만 여전히 미표시** — Vulkan 오프스크린에선 VT 피드백 자체가 무동작(VeryVerbose 로그 0줄). bindless 가설(`BaseLinuxEngine.ini`의 VULKAN_SM6 `BindlessConfiguration=All`)은 오버라이드 실험으로 **반증**됨. 쿡타임 VT-off(`r.VirtualTextures=0`) 우회는 VT 샘플러 불일치로 데칼이 흰 판이 되어 기각.
+  - **이어서 할 일(플랜 B, ~30분)**: Vulkan에서도 라인을 원하면 라인 데칼을 비-VT로 교체 — 근거: 같은 슬롯 BP의 장애인 아이콘 데칼(`M_장애인`, 부모 `/Game/M_Auto/M_Decal`, 비-VT, MD_DeferredDecal)은 전 플랫폼 정상. 절차: 라인 텍스처 3장(`T_Decal_Line_Road_White_02_{D,DpRA,N}`) VirtualTextureStreaming=False + 비-VT 데칼 머티리얼 신설(D=베이스컬러, DpRA 채널=오패시티) + `MI_Decal_Line_Road_White_02` 부모 교체. Megascans 공용 `_VT` 마스터는 건드리지 말 것(횡단보도 등 공유).
+  - **이번에 남긴 설정(전부 유지)**: `DefaultGame.ini [Staging] +AllowedDirectories=..._RYU_Portable/.../Upper/Windows`(폴더명 "Windows"가 UAT 제한폴더에 걸려 Linux 스테이징 실패하던 것), `DefaultEngine.ini [HTTPServer.Listeners]` 8081~8084·8095 포트별 `BindAddress=any`(원격 제어용, MCP :8000은 localhost 유지), `Config/Linux/LinuxEngine.ini [ShaderPlatformConfig VULKAN_SM6] BindlessConfiguration=RayTracing`(반증된 실험 부산물이나 무해·RT 미사용, 원복하려면 Vulkan 셰이더 풀 리컴파일 ~20분이라 유지).
+  - **Linux 빌드 인프라(재현 절차)**: 툴체인 `v26_clang-20.1.8-rockylinux8` 설치됨(`LINUX_MULTIARCH_ROOT` 머신 env, 단 기존 셸엔 미반영이라 `$env:` 수동 지정) + 런처에서 UE5.8 Linux 타깃 컴포넌트 설치됨. `./Scripts/package.ps1 -Platform Linux` → `tar -C Packaged/Linux -cf - . | ssh gb_210 'tar -xf - -C ~/baro_sim'`. Zen 스토어가 `[::1]:8558 연결 거부`로 간헐 실패하면 그냥 재실행. 상세는 전역 메모리 `baro-unreal-packaging-cli`, `ue-scenecapture-streaming-lod`.
 - 2026-07-08: **씬 제어 슬롯 라벨 계약 + 플러그인 v0.1.1 반영.**
   - `baroCCTVSimulator` 플러그인의 `/scene/slots` 응답에 안정 ID(`id=GetName()`)와 에디터 표시명(`label=GetActorLabel()`)을 함께 내려주도록 정리. 웹 UI는 `label || id`를 표시하고 숫자 인식 natural sort로 `BP_ParkingSlot1,2,3,...10` 순서를 유지한다.
   - 프론트가 `BP_ParkingSlot_C_*` 런타임 이름을 가공하거나 하드코딩하지 않도록 계약을 문서화. 관련 API 문서 `docs/scene-control-api.md` 기준 버전을 플러그인 **v0.1.1**로 갱신.

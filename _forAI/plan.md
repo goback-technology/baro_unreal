@@ -38,8 +38,9 @@
 - [x] **sim_03 빌딩 베이크**(`LV_Park_03` → `SM_sim03_buildings`, RYU참조 0) + 콜리전 제거(내비 부하 해소). (2026-07-06)
 - [x] **CLI 패키징 + Win64 빌드·실행검증**: `Scripts/package.ps1`, sim_01 단독 Development 3.4GB, Hucoms 4포트·HTTP 응답 검증 통과. (2026-07-06)
 - [ ] **sim_03 병합메시 Nanite 불가**(144 머티섹션 > 한계) — 필요 시 Merge Materials=on 재병합. VSM 그림자 경고 잔존(콜리전 제거로 부하는 이미 해소).
-- [ ] **우분투(Linux) 빌드**: 툴체인 `v26_clang-20.1.8-rockylinux8` 설치 후 `./Scripts/package.ps1 -Platform Linux`. 코드/플러그인 준비완료(소켓 크로스플랫폼). 실행엔 GPU+Vulkan 필요. (memo/전역 `baro-unreal-packaging-cli`.)
-- [ ] **원격 제어**(다른 호스트) 필요 시 HTTP 제어 포트 `127.0.0.1`→`0.0.0.0` 바인딩 조정(스트림은 이미 0.0.0.0).
+- [x] **우분투(Linux) 빌드 + gb_210 배포**: 툴체인/런처 Linux 컴포넌트 설치 → 빌드·배포·원격 제어 검증(2026-07-10). ⚠️ 주차면 라인 데칼만 Vulkan에서 미표시(VT 피드백 무동작) — 필요 시 플랜 B(라인 데칼 비-VT 교체, dev_log 2026-07-10 절차 참조).
+- [x] **원격 제어 바인딩**: `DefaultEngine.ini [HTTPServer.Listeners]` 포트별(8081~8084·8095) `BindAddress=any` — MCP :8000은 localhost 유지. (2026-07-09)
+- [x] **주차면 라인 미렌더(쿡 빌드) 해결**: 캡처 VT 스로틀 — `bOverrideVirtualTextureThrottle=true`, 플러그인 0.1.3, Win64 클린부팅 6/6 검증. 시연 보존본 `Packaged/Win64_Shipping_demo-20260710`. (2026-07-10)
 - [x] **씬 제어 슬롯 라벨 계약 정리**: `/scene/slots`가 `id=GetName()` + `label=GetActorLabel()`을 제공, baro_calory 웹은 `label || id` 표시 + natural sort. 플러그인 v0.1.1. (2026-07-08)
 
 ## Structure decisions
