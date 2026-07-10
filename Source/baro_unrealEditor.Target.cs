@@ -3,6 +3,7 @@
 using UnrealBuildTool;
 using System.Collections.Generic;
 
+[SupportedPlatforms("Win64")]
 public class baro_unrealEditorTarget : TargetRules
 {
 	public baro_unrealEditorTarget( TargetInfo Target) : base(Target)

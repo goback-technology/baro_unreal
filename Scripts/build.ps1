@@ -10,7 +10,6 @@
 #>
 param(
     [ValidateSet("Editor", "Game")] [string]$Target = "Editor",
-    [ValidateSet("Win64", "Linux")] [string]$Platform = "Win64",
     [ValidateSet("Debug", "DebugGame", "Development", "Shipping")] [string]$Config = "Development",
     [switch]$Clean
 )
@@ -25,6 +24,7 @@ if ($Target -eq "Editor" -and $Config -eq "Shipping") {
 
 $buildBat = Join-Path $BaroEngine "Engine\Build\BatchFiles\Build.bat"
 $targetName = if ($Target -eq "Editor") { "baro_unrealEditor" } else { "baro_unreal" }
+$Platform = "Win64"
 
 Assert-BaroFile -Path $buildBat -Message "Build.bat 없음. .env의 UE_PATH를 확인하세요"
 Assert-BaroFile -Path $BaroProject -Message "uproject 없음. PROJECT_FILE 또는 프로젝트 경로를 확인하세요"

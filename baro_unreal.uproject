@@ -3,6 +3,9 @@
 	"EngineAssociation": "5.8",
 	"Category": "",
 	"Description": "",
+	"TargetPlatforms": [
+		"Windows"
+	],
 	"Modules": [
 		{
 			"Name": "baro_unreal",
