@@ -93,9 +93,34 @@ if (Test-Path -LiteralPath $Archive) {
     Remove-Item -LiteralPath $Archive -Recurse -Force
 }
 
-& $UAT @uatArgs
-$code = $LASTEXITCODE
-if ($code -ne 0) { throw "패키징 실패 (exit $code) — 위 로그를 확인하세요." }
+# Zen 스토어 경쟁 조건 대비 재시도.
+#   zenserver 는 상주 데몬이 아니라 sponsor 프로세스(에디터/쿡)가 전부 사라지면 스스로 종료한다.
+#   BuildCookRun 은 쿡을 별도 프로세스로 돌린 뒤 UAT 본체가 oplog 를 HTTP 로 되읽어 스테이징하는데,
+#   UAT 는 sponsor 로 등록되지 않는다(sponsor 슬롯은 UE 프로세스만 쓰는 공유메모리). 쿡이 끝나 sponsor 가
+#   0 이 되는 순간 zenserver 가 내려가면 UAT 의 읽기가 스트림 중간에 끊긴다:
+#     "Failed reading oplog from Zen ... Error while copying content to a stream"
+#   쿡 산출물 자체는 Zen 에 온전하므로 재시도하면 캐시 히트로 통과한다(실측 2026-07-10: 재시도 51초 성공).
+#   외부에서 sponsor 를 심는 지원 경로가 없어 재시도가 유일한 실용 해법이다.
+$uatLog = Join-Path $BaroRoot "Saved\Logs\package-uat.log"
+New-Item -ItemType Directory -Force -Path (Split-Path $uatLog) | Out-Null
+
+$maxAttempts = 2
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    if ($attempt -gt 1) {
+        Write-Host (" Zen 경쟁 조건 감지 — 재시도 {0}/{1}" -f $attempt, $maxAttempts) -ForegroundColor Yellow
+    }
+
+    & $UAT @uatArgs 2>&1 | Tee-Object -FilePath $uatLog
+    $code = $LASTEXITCODE
+    if ($code -eq 0) { break }
+
+    # Zen 실패일 때만 재시도한다. 컴파일/쿡 에러를 재시도하면 시간만 버린다.
+    $zenRace = Select-String -Path $uatLog -Quiet `
+        -Pattern 'Failed reading oplog from Zen', 'Failed to send oplog request to Zen'
+    if (-not $zenRace -or $attempt -eq $maxAttempts) {
+        throw "패키징 실패 (exit $code) — 위 로그를 확인하세요. (UAT 로그: $uatLog)"
+    }
+}
 
 Write-Host "==================== 완료 ====================" -ForegroundColor Green
 Write-Host (" 산출물: {0}" -f $Archive) -ForegroundColor Green

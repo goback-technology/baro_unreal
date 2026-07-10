@@ -45,6 +45,10 @@
 - 에셋 이관: **파일 직접 복사(robocopy)** 채택 — parking_area가 5.7이고 Content 의존이 광범위해 통째 복사가 확실. `/Game` 경로 동일해 참조 자동 해소.
 - CCTV 코드: 호스트 게임 모듈이 아니라 **`baroCCTVSimulator` 플러그인(git submodule)** 단일 소스.
   baroQuantum과 baro_unreal이 함께 소비한다. 이관 시 `CoreRedirects` 필수(2026-07-03).
+- **플러그인은 "최소한의 카메라"**(2026-07-10 확정). 앱 고유 기능(HUD·버전 표기·서빙 주소)은 플러그인이 아니라
+  호스트 게임 모듈에서 상속으로 붙인다. 공용 서브모듈을 건드리면 버전 범프·풀 리빌드·push·두 프로젝트
+  서브모듈 갱신 사슬이 발생하고, 다른 소비 프로젝트에 불필요한 변경이 강제된다.
+- **브랜치**: `main` = Windows 전용 기반. Linux/Vulkan 작업은 `dev/vulkan-port`에서만 한다(실험적).
 - 레벨: parking_area 레벨은 **모놀리식 `.umap`(월드파티션 아님)** — 그대로 사용.
 - 플러그인: RYU는 프로젝트 로컬 `Plugins/`(콘텐츠+모듈, 5.8 재빌드), 나머지는 엔진 내장 활성.
 - **플랫폼: Windows·Win64 전용**(2026-07-10 확정). Linux/Vulkan은 보류다 —

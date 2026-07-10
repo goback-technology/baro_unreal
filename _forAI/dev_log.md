@@ -11,6 +11,55 @@
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
 
+- 2026-07-10 (저녁): **앱 전용 HUD(앱 버전 + 외부 접속 주소) · 패키징 Zen 경쟁조건 규명/가드 · 브랜치 재편.**
+  - **플러그인 무수정 원칙 확립(이교수님 지시).** `baroCCTVSimulator`는 "최소한의 카메라"다. 앱 고유 표시는
+    호스트 게임 모듈에서 해결한다. 3프로젝트 공용 서브모듈이라 한 줄만 고쳐도 `.uplugin` 범프 → 풀 리빌드 →
+    원격 push → 두 소비 프로젝트 포인터 갱신 사슬이 터진다. (전역 메모리 `plugin-is-minimal-camera`.)
+  - **구현(플러그인 0줄 수정)**: 신규 `Source/baro_unreal/BaroUnrealHUD.{h,cpp}`(AHUD 직접 상속 — 플러그인
+    `ABaroSimHUD::FpsEma`가 private이라 상속 이득 없음) + `BaroUnrealGameMode.{h,cpp}`(`ABaroSimGameMode` 상속,
+    생성자에서 `HUDClass`만 교체) + `DefaultEngine.ini GlobalDefaultGameMode=/Script/baro_unreal.BaroUnrealGameMode`.
+    상속 경로가 열려 있는 근거: 플러그인 클래스 전부 `BAROCCTVSIMULATOR_API` export, `DrawHUD()` virtual,
+    생성자 public, `UHucomsServerSubsystem::{GetChannelCount,BaseHttpPort,BaseMjpegPort,GetChannelStatusLines}`와
+    `USceneControlSubsystem::ScenePort` 공개.
+    **함정**: 플러그인 `Build.cs`의 `Sockets`/`Networking`/`Projects`는 **Private 의존이라 전이되지 않는다** →
+    게임 `Build.cs`에 `baroCCTVSimulator`(Public) + `Sockets`·`Projects`(Private)를 직접 추가해야 링크된다.
+  - **앱 버전 신설**: `Config/DefaultGame.ini [/Script/EngineSettings.GeneralProjectSettings] ProjectVersion=0.1.0`.
+    이전엔 키 자체가 없어 UE 기본값 `1.0.0.0`이었고, HUD 제목줄은 **플러그인 버전**을 앱 버전인 양 보여주고 있었다.
+    이제 제목줄 `baro_unreal v0.1.0`, 아래 작은 줄 `plugin baroCCTVSimulator v0.1.3`으로 분리 표기.
+  - **서빙 주소 표시**: `ISocketSubsystem::GetLocalAdapterAddresses()`로 IPv4 열거. **`127.` 뿐 아니라 `169.254.`
+    (APIPA 링크로컬)도 반드시 거른다** — 이 개발 PC 실측상 169.254가 4개(끊긴 Wi-Fi·블루투스 PAN·가상 스위치)이고
+    실제 LAN은 이더넷 `192.168.0.211` 하나뿐이다. `GetLocalHostAddr()`가 링크로컬을 돌려주는 경우가 있어,
+    필터를 통과할 때만 맨 앞으로 올린다. 바인딩은 원래부터 전 인터페이스였다(HTTP `BindAddress=any`,
+    MJPEG `FIPv4Address::Any`) — **주소를 몰라서 못 붙었던 것이지 안 열려 있던 게 아니다.**
+  - ⚠️ **포트를 기본값에서 옮기면 HUD가 거짓말을 한다.** `[HTTPServer.Listeners]`는 8081~8084·8095만
+    `BindAddress=any`로 지정한다. `BaseHttpPort`를 8181로 옮겨 검증했더니 8181/8182/8195는 `127.0.0.1`에만
+    바인딩됐다(MJPEG 8191/8192는 코드가 Any라 `0.0.0.0`). HUD는 여전히 LAN URL을 찍으므로, 포트를 바꿀 땐
+    `ListenerOverrides` 항목도 함께 추가할 것.
+  - **검증**: Editor/Development 빌드 → 대체 포트(8181/8191/8195) standalone `-game`으로 **기존 인스턴스를 죽이지 않고**
+    창 캡처해 HUD 확인 → Development 패키징 후 `Packaged/Win64` 실행본에서도 8081/8091/8095 · `192.168.0.211` 확인.
+    (Development 빌드에서만 뜨는 엔진 온스크린 경고 `TEXTURE STREAMING POOL OVER`가 HUD 줄과 Y가 겹친다. Shipping엔 없음.)
+  - **패키징 Zen 경쟁 조건 규명.** `./Scripts/package.ps1`이
+    `Failed reading oplog from Zen ... Error while copying content to a stream`(UAT exit 1)으로 실패.
+    **쿡은 성공했다** — `ZenLocalGetHitPct=1.0`, oplog 1716 엔트리 스냅샷 기록 완료. 메모리(여유 40.5GB)·디스크(370GB)도 무죄.
+    진범은 zenserver의 수명 모델이다. zenserver는 상주 데몬이 아니라 **sponsor 프로세스가 전부 사라지면 자결**한다.
+    `zenserver.1.log` 실측:
+    ```
+    17:33:46  added process with pid 38448 as a sponsor process   ← sponsor = 쿡 프로세스 하나뿐
+    17:34:20  GC stale target process pid 38448 (exit code: 0)    ← 쿡 정상 종료
+    17:34:21  exiting since sponsor processes are all gone
+    ```
+    그 순간 UAT는 스테이징을 위해 oplog를 HTTP로 되읽는 중이었다. **UAT는 sponsor가 아니다** — sponsor 슬롯은
+    UE 프로세스만 쓰는 공유메모리 8칸(`ZenServerState.cpp` `SponsorPids[8]`)이고, `--owner-pid`는 종료 신호용일 뿐
+    sponsor가 아니다(`ZenServerInterface.cpp:2223`). 즉 **외부에서 sponsor를 심는 지원 경로가 없다.**
+  - **해법 = 재시도.** 쿡 산출물이 Zen에 온전하므로 재실행은 캐시 히트로 통과한다(실측 **51초, ExitCode=0**).
+    `package.ps1`에 UAT 출력을 `Saved/Logs/package-uat.log`로 티잉하고, **Zen oplog 오류일 때만 1회 자동 재시도**하는
+    가드를 넣었다(컴파일·쿡 에러는 즉시 실패 — 헛된 재시도 방지). `Tee-Object` 파이프라인 뒤에도 `$LASTEXITCODE`가
+    보존됨을 별도 실측으로 확인.
+  - **브랜치 재편**: `feat/windows-only-deploy`(aa83733)를 `main`으로 **fast-forward**(main에만 있던 커밋 0개 →
+    force push 불필요). 직전 `main`(c03c6b9 = Linux/Vulkan 코드가 살아 있는 마지막 지점)을 **`dev/vulkan-port`**로
+    보존해 push. `feat/windows-only-deploy`는 로컬·원격 삭제. **main = Windows 전용 기반, Linux/Mac은 실험 브랜치.**
+  - **플러그인 v0.1.3 원격 반영**: `baroCCTVSimulator` origin/main `55bb988 → ea38976` push. 그전까지 v0.1.1~0.1.3이
+    baro_unreal 로컬에만 있어 baroQuantum이 받을 수 없는 상태였다. baroQuantum 서브모듈도 `ea38976`으로 갱신(커밋 `4592678`).
 - 2026-07-10 (문서 정리): **`_forAI` 문서 세트 감사·정리 + RYU 플러그인 활성 상태 사실 정정.**
   - 5개 문서의 사실 주장을 저장소 실물과 대조(적대적 검증 포함). 확정 19건 반영, 기각 12건 폐기.
   - **정정 1 — RYU 플러그인은 비활성이 아니다.** 2026-07-06 (저녁) 엔트리와 구 `inventory.md`는

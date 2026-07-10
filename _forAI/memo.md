@@ -23,7 +23,9 @@
   - **카메라 수는 맵마다 다르다** — 기본 맵 `LV_Park_sim_01` = 2대(8081·8082 / 8091·8092), `sim_02` = 2대, `sim_03` = 4대(8081~8084 / 8091~8094). `DefaultEngine.ini [HTTPServer.Listeners]`가 8081~8084를 미리 예약(상한 슈퍼셋)해 둔 것이지 항상 4포트가 열린다는 뜻이 아니다.
 - **스트림**: `StreamFps=30`(DefaultGame.ini 오버라이드 — 코드 기본 15), 1280×720 q80. **스냅샷**: QHD 2560×1440 q92, 워밍업 0.
 - **톤**: 노출 -0.7 + **대비 1.2**(DefaultGame.ini `CaptureContrast` — 코드 기본 1.6은 흰 차+직사광에서 "탄" 세피아, 2026-07-02 실측 개정). 라이브 스윕은 `/api/capture-tuning`.
-- **표준 실행**: `./Scripts/run.ps1`(기본 `-Mode Game`) — `.env`의 `UE_PATH`/`DEFAULT_MAP`/`RUN_RESX`/`RUN_RESY`를 읽어 standalone `UnrealEditor.exe <uproject> -game -windowed -ResX=960 -ResY=540`을 띄운다. `GameDefaultMap=/Game/simulator/LV_Park_sim_01`, `GlobalDefaultGameMode=/Script/baroCCTVSimulator.BaroSimGameMode`(구체 폰 없음·월드 렌더 OFF·커서 표시·**ESC 종료**·HUD에 채널별 실측 fps). 완전 무창은 `-RenderOffscreen -log`(-nullrhi 금지 — SceneCapture가 못 돎).
+- **표준 실행**: `./Scripts/run.ps1`(기본 `-Mode Game`) — `.env`의 `UE_PATH`/`DEFAULT_MAP`/`RUN_RESX`/`RUN_RESY`를 읽어 standalone `UnrealEditor.exe <uproject> -game -windowed -ResX=960 -ResY=540`을 띄운다. `GameDefaultMap=/Game/simulator/LV_Park_sim_01`, `GlobalDefaultGameMode=/Script/baro_unreal.BaroUnrealGameMode`(앱 게임모드 — 플러그인 `ABaroSimGameMode` 상속, HUD만 앱 것으로 교체. 구체 폰 없음·월드 렌더 OFF·커서 표시·**ESC 종료**). 완전 무창은 `-RenderOffscreen -log`(-nullrhi 금지 — SceneCapture가 못 돎).
+- **앱 버전**: `DefaultGame.ini [/Script/EngineSettings.GeneralProjectSettings] ProjectVersion`(현 **0.1.0**). 플러그인 `.uplugin` VersionName(현 0.1.3)과 **별개**다. HUD 제목줄=`baro_unreal v0.1.0`, 그 아래 작은 줄=`plugin baroCCTVSimulator v0.1.3`. 앱 코드 수정 시 ProjectVersion 끝자리 +1.
+- **HUD 서빙 주소**: `ABaroUnrealHUD`가 `ISocketSubsystem::GetLocalAdapterAddresses()`로 IPv4를 열거해 첫 줄에 표시한다. `127.`과 **`169.254.`(APIPA 링크로컬)** 를 둘 다 걸러야 한다 — 이 개발 PC엔 169.254가 4개(끊긴 Wi-Fi·블루투스 PAN 등), 실제 LAN은 이더넷 하나(`192.168.0.211`)뿐이다.
 - **배포 창/품질 기본값**: `DefaultGameUserSettings.ini`의 `FullscreenMode=2`(일반 창), 960×540, Epic(3), `sg.ResolutionQuality=100`. 메인 창 크기와 CCTV 캡처(QHD 2560×1440 q92)는 서로 독립이다. Cinematic(4)은 다중 SceneCapture의 VRAM 압박으로 mip/Lumen 품질이 흔들릴 수 있어 강제하지 않는다.
 
 ## 런타임 구조 메모
@@ -39,6 +41,7 @@
 - `/scene/slots` 표시명은 에디터 Actor Label이 기준이다. 응답은 `id=GetName()`(RPC 안정 식별자)과 `label=GetActorLabel()`(웹 표시명)을 모두 제공한다. 프론트에서 `BP_ParkingSlot_C_*` 이름을 임의 변환하지 않는다.
 - 플러그인 버전은 `baroCCTVSimulator.uplugin` `VersionName`이 단일 출처다. 현재 **0.1.3**(0.1.2=차종 카탈로그 리플렉션, 0.1.3=캡처 VT 스로틀 해제)이며 `/scene/catalog.pluginVersion`, 웹 `/simulator` 씬 카드, `BaroSimHUD`에 표시된다.
 - **SceneCapture 전용 렌더 3중 함정**(캡처가 안 보이거나 뭉개지면 이 순서로 의심): ① 텍스처 스트리머 뷰 미등록(AddViewInformation) ② 폴리지 LOD 줌 보정(LODDistanceFactor) ③ **VT 페이지 스로틀**(`bOverrideVirtualTextureThrottle=true` — 주차라인 데칼 사건 2026-07-10, dev_log 참조).
+- **플러그인은 "최소한의 카메라" — 앱 고유 기능을 넣지 않는다.** HUD·버전 표기·서빙 주소처럼 이 앱에만 필요한 것은 호스트 게임 모듈(`Source/baro_unreal/`)에서 상속으로 해결한다. 플러그인 클래스는 전부 `BAROCCTVSIMULATOR_API` export이고 `DrawHUD()`가 virtual, `ABaroSimGameMode` 생성자가 public이라 `HUDClass` 교체만으로 충분하다. 플러그인 `Build.cs`의 `Sockets`/`Networking`/`Projects`는 Private 의존이라 전이되지 않으니 게임 `Build.cs`에 직접 추가한다. (근거: 3프로젝트 공용 서브모듈 → 한 줄 수정도 버전 범프·풀 리빌드·push·서브모듈 갱신 사슬.)
 - **제어 API 무인증은 의도된 결정**: 씬 제어(8095)와 Hucoms CGI(8081~8084)는 토큰·API키·origin 검사가 없고 `DefaultEngine.ini [HTTPServer.Listeners]`에서 포트별 `BindAddress=any`로 LAN에 열어 둔다. 이 시뮬레이터는 **개발 보조용이며 내부망 전용**이므로 인증을 두지 않는다(2026-07-10 확정). 입력 하드닝은 값 클램핑(차종·색·번호판 정규화)까지가 범위다. MCP(8000)는 override를 주지 않아 localhost로 남는다 — 여기에 `BindAddress=any`를 추가하지 말 것.
 
 ## 반복 금지
@@ -48,6 +51,7 @@
 - **에디터로 성능 테스트 금지**: 에디터는 포커스 잃으면 "Use Less CPU when in Background" 스로틀로 게임 틱 ~3.3fps(스트림도 같이 붕괴). 브라우저를 보는 순간 에디터는 항상 백그라운드다. **성능은 standalone `-game`으로 실측**(스탠드얼론은 스로틀 없음).
 - **SceneCapture는 텍스처 스트리머에 시점을 등록하지 않는다**(UE5.8 엔진 소스 확인 — 뷰포트 뷰만 등록). 캡처 전용 카메라는 `IStreamingManager::AddViewInformation`(위치+줌 FOV)을 직접 등록해야 원거리 mip이 올라온다. 거리 기반 폴리지 컬링은 FOV 무시 → `LODDistanceFactor`로 줌 보정.
 - Live Coding 활성(에디터/게임 실행 중) 상태에선 CLI 빌드 거부됨 — 프로세스 닫고 빌드. 새 UCLASS 추가는 어차피 풀 리빌드 필요.
+- **패키징이 `Failed reading oplog from Zen ... Error while copying content to a stream`으로 죽는 건 코드 문제가 아니다.** zenserver는 상주 데몬이 아니라 **sponsor 프로세스(에디터/쿡)가 0이 되면 자결**한다. `BuildCookRun`은 쿡을 별도 프로세스로 돌린 뒤 UAT 본체가 oplog를 되읽어 스테이징하는데, UAT는 sponsor가 아니다(sponsor 슬롯 = UE 프로세스만 쓰는 공유메모리 `SponsorPids[8]`). 쿡이 끝나는 순간 서버가 내려가면 읽기가 스트림 중간에 끊긴다. `--owner-pid`는 종료 신호용이지 sponsor가 아니라 외부에서 심을 방법이 없다. **해법은 재시도**(쿡 결과는 Zen에 온전 → 캐시 히트로 통과). `Scripts/package.ps1`이 Zen 오류일 때만 1회 자동 재시도한다. 진단은 `%LOCALAPPDATA%\UnrealEngine\Common\Zen\Data\logs\zenserver*.log`의 `exiting since sponsor processes are all gone`으로.
 - **클론 직후 `git submodule update --init --recursive` 필수** — `Plugins/baroCCTVSimulator`가 서브모듈이라 빠뜨리면 CCTV 클래스가 통째로 사라진 채 레벨이 열린다(참조 깨짐이 액터 소실로 보임).
 - **uproject Plugins 배열에 없다 = 비활성이 아니다.** 프로젝트 로컬 플러그인은 `EnabledByDefault` 미지정 시 **기본 활성**(`FPlugin::IsEnabledByDefault`: Unspecified → `LoadedFrom == Project`). RYU가 여기 해당한다 — 끄려면 `"Enabled": false`를 명시해야 한다.
 
