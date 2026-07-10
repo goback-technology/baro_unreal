@@ -30,9 +30,10 @@
 ## 현재 스냅샷
 
 - 저장소 경로: `C:\works\ue_prjs\baro_unreal`
-- 대상 보드/플랫폼: Unreal Engine 5.8 / Windows 11 (에디터용 C++ 프로젝트, 모듈 `baro_unreal`)
-- 현재 버전: 주차장 환경(parking_area 30GB) + CCTV 시뮬 C++ 통합 완료. 작업 레벨 `/Game/Levels/LV_Park_01`(PTZ 4대 배치).
-- 메인 엔트리포인트: `UHucomsServerSubsystem`(PIE/Game BeginPlay에 Hucoms HTTP 서버 :8081 기동) + `APTZCamera`. 다음 단계는 PIE 서버 기동 검증(`plan.md`).
+- 대상 플랫폼: Unreal Engine 5.8 / **Windows 11·Win64 전용**. DX12/SM6 고품질 렌더 경로를 사용하며 Linux 버전은 보류한다.
+- 현재 버전: 주차장 환경 + `baroCCTVSimulator` v0.1.3 통합. 기본 배포 맵은 `/Game/simulator/LV_Park_sim_01`이다.
+- 메인 엔트리포인트: `UHucomsServerSubsystem` + `APTZCamera` + `USceneControlSubsystem`(전부 `baroCCTVSimulator` 플러그인). 패키지 기본값은 960×540 창모드, Epic 품질·해상도 품질 100이다.
+- 저장소는 **code-only**다 — `Content/`(30GB)와 RYU 플러그인은 git에 없다. 신규 클론은 에셋 재취득 + `git submodule update --init --recursive`가 필요하다(루트 `readme.md`).
 - MCP: Unreal MCP 서버 활성(`:8000`, `bAutoStartServer=True`), Claude Code 전역(user) 등록 연결됨
 
 ## 유지 규칙
@@ -41,5 +42,6 @@
 - 저장소 구조나 실행 명령이 바뀌면 `inventory.md`를 먼저 갱신한다.
 - 작업 이력은 날짜를 붙여 `dev_log.md`에만 남긴다.
 - 새 작업을 시작할 때는 `inventory.md`와 `memo.md`를 먼저 읽고, 실제 할 일은 `plan.md`에서 확인한다.
+- 모든 문서에는 제목 바로 아래에 `## 목차` 섹션을 둔다.
 - 사용자 동의 없이 git commit을 하지 않는다.
 - 사용자 동의 없이 `_forAI/` 문서를 수정하지 않는다.

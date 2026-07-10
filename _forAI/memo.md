@@ -11,18 +11,20 @@
 
 ## 제품 기준선
 
-- 엔진: Unreal Engine **5.8** (Windows 11 / PowerShell)
+- 엔진: Unreal Engine **5.8** (Windows 11 / PowerShell), **Win64 전용**. Linux/Vulkan 버전은 2026-07-10부로 보류.
 - 프로젝트: `baro_unreal` — C++ 게임 모듈(에디터 타깃 `baro_unrealEditor`)
 - 통합 출처: 레벨=`parking_area`(Parking_Project), CCTV 시뮬=`baro_world 5.8`
-- TODO: 최종 타깃 런타임(standalone/PIE)·배포 형태 확정
+- 배포 기준: Win64 Shipping, 일반 창모드 960×540. Linux 재개는 별도 요청 전까지 범위 밖이다.
 
 ## 기본 설정값
 
 - MCP 서버(에디터 내장): `http://127.0.0.1:8000/mcp`, `bAutoStartServer=True`
-- **포트(카메라 4대, 인덱스 자동 부여)**: HTTP CGI **8081~8084**(BaseHttpPort+i), 연속 MJPEG TCP **8091~8094**(BaseMjpegPort+i). baro_calory `config.json devices[].port/mjpegPort`와 1:1.
+- **포트(카메라 인덱스만큼 자동 부여)**: HTTP CGI = `BaseHttpPort` **8081**+i, 연속 MJPEG TCP = `BaseMjpegPort` **8091**+i. 씬 제어는 **8095** 고정. baro_calory `config.json devices[].port/mjpegPort`와 1:1.
+  - **카메라 수는 맵마다 다르다** — 기본 맵 `LV_Park_sim_01` = 2대(8081·8082 / 8091·8092), `sim_02` = 2대, `sim_03` = 4대(8081~8084 / 8091~8094). `DefaultEngine.ini [HTTPServer.Listeners]`가 8081~8084를 미리 예약(상한 슈퍼셋)해 둔 것이지 항상 4포트가 열린다는 뜻이 아니다.
 - **스트림**: `StreamFps=30`(DefaultGame.ini 오버라이드 — 코드 기본 15), 1280×720 q80. **스냅샷**: QHD 2560×1440 q92, 워밍업 0.
 - **톤**: 노출 -0.7 + **대비 1.2**(DefaultGame.ini `CaptureContrast` — 코드 기본 1.6은 흰 차+직사광에서 "탄" 세피아, 2026-07-02 실측 개정). 라이브 스윕은 `/api/capture-tuning`.
-- **표준 실행**: standalone `UnrealEditor.exe <uproject> -game -windowed -ResX=960 -ResY=540` — `GameDefaultMap=/Game/simulator/LV_Park_sim_01`, `GlobalDefaultGameMode=BaroSimGameMode`(구체 폰 없음·월드 렌더 OFF·커서 표시·**ESC 종료**·HUD에 채널별 실측 fps). 완전 무창은 `-RenderOffscreen -log`(-nullrhi 금지 — SceneCapture가 못 돎).
+- **표준 실행**: `./Scripts/run.ps1`(기본 `-Mode Game`) — `.env`의 `UE_PATH`/`DEFAULT_MAP`/`RUN_RESX`/`RUN_RESY`를 읽어 standalone `UnrealEditor.exe <uproject> -game -windowed -ResX=960 -ResY=540`을 띄운다. `GameDefaultMap=/Game/simulator/LV_Park_sim_01`, `GlobalDefaultGameMode=/Script/baroCCTVSimulator.BaroSimGameMode`(구체 폰 없음·월드 렌더 OFF·커서 표시·**ESC 종료**·HUD에 채널별 실측 fps). 완전 무창은 `-RenderOffscreen -log`(-nullrhi 금지 — SceneCapture가 못 돎).
+- **배포 창/품질 기본값**: `DefaultGameUserSettings.ini`의 `FullscreenMode=2`(일반 창), 960×540, Epic(3), `sg.ResolutionQuality=100`. 메인 창 크기와 CCTV 캡처(QHD 2560×1440 q92)는 서로 독립이다. Cinematic(4)은 다중 SceneCapture의 VRAM 압박으로 mip/Lumen 품질이 흔들릴 수 있어 강제하지 않는다.
 
 ## 런타임 구조 메모
 
@@ -37,6 +39,7 @@
 - `/scene/slots` 표시명은 에디터 Actor Label이 기준이다. 응답은 `id=GetName()`(RPC 안정 식별자)과 `label=GetActorLabel()`(웹 표시명)을 모두 제공한다. 프론트에서 `BP_ParkingSlot_C_*` 이름을 임의 변환하지 않는다.
 - 플러그인 버전은 `baroCCTVSimulator.uplugin` `VersionName`이 단일 출처다. 현재 **0.1.3**(0.1.2=차종 카탈로그 리플렉션, 0.1.3=캡처 VT 스로틀 해제)이며 `/scene/catalog.pluginVersion`, 웹 `/simulator` 씬 카드, `BaroSimHUD`에 표시된다.
 - **SceneCapture 전용 렌더 3중 함정**(캡처가 안 보이거나 뭉개지면 이 순서로 의심): ① 텍스처 스트리머 뷰 미등록(AddViewInformation) ② 폴리지 LOD 줌 보정(LODDistanceFactor) ③ **VT 페이지 스로틀**(`bOverrideVirtualTextureThrottle=true` — 주차라인 데칼 사건 2026-07-10, dev_log 참조).
+- **제어 API 무인증은 의도된 결정**: 씬 제어(8095)와 Hucoms CGI(8081~8084)는 토큰·API키·origin 검사가 없고 `DefaultEngine.ini [HTTPServer.Listeners]`에서 포트별 `BindAddress=any`로 LAN에 열어 둔다. 이 시뮬레이터는 **개발 보조용이며 내부망 전용**이므로 인증을 두지 않는다(2026-07-10 확정). 입력 하드닝은 값 클램핑(차종·색·번호판 정규화)까지가 범위다. MCP(8000)는 override를 주지 않아 localhost로 남는다 — 여기에 `BindAddress=any`를 추가하지 말 것.
 
 ## 반복 금지
 
@@ -45,6 +48,8 @@
 - **에디터로 성능 테스트 금지**: 에디터는 포커스 잃으면 "Use Less CPU when in Background" 스로틀로 게임 틱 ~3.3fps(스트림도 같이 붕괴). 브라우저를 보는 순간 에디터는 항상 백그라운드다. **성능은 standalone `-game`으로 실측**(스탠드얼론은 스로틀 없음).
 - **SceneCapture는 텍스처 스트리머에 시점을 등록하지 않는다**(UE5.8 엔진 소스 확인 — 뷰포트 뷰만 등록). 캡처 전용 카메라는 `IStreamingManager::AddViewInformation`(위치+줌 FOV)을 직접 등록해야 원거리 mip이 올라온다. 거리 기반 폴리지 컬링은 FOV 무시 → `LODDistanceFactor`로 줌 보정.
 - Live Coding 활성(에디터/게임 실행 중) 상태에선 CLI 빌드 거부됨 — 프로세스 닫고 빌드. 새 UCLASS 추가는 어차피 풀 리빌드 필요.
+- **클론 직후 `git submodule update --init --recursive` 필수** — `Plugins/baroCCTVSimulator`가 서브모듈이라 빠뜨리면 CCTV 클래스가 통째로 사라진 채 레벨이 열린다(참조 깨짐이 액터 소실로 보임).
+- **uproject Plugins 배열에 없다 = 비활성이 아니다.** 프로젝트 로컬 플러그인은 `EnabledByDefault` 미지정 시 **기본 활성**(`FPlugin::IsEnabledByDefault`: Unspecified → `LoadedFrom == Project`). RYU가 여기 해당한다 — 끄려면 `"Enabled": false`를 명시해야 한다.
 
 ## RYU 플러그인-프리 베이크 (이어작업 레시피)
 
@@ -52,7 +57,7 @@
 
 **핵심 사실**: RYU 빌딩(`BP_RYUBuilding_*`) 상세 지오메트리는 **PCG가 `/Script/RYUKoreaBuilidngCreator` C++로 매 로드 생성하는 transient**(생성기 `BP_GenerateUpperDistributionByGrammar` 등 + 구조체 `SymbolMeshVariation`). 콘텐츠만 /Game로 옮기고 플러그인을 끄면 **상세가 소실**(컴포넌트 ~68→8=기초박스+옥상만). ⇒ **반드시 스태틱 베이크 후 플러그인 제거**.
 
-**전제(이미 완료)**: RYU 콘텐츠는 `/Game/_RYU_Portable/`에 있고 7레벨 참조 재연결됨(RYU참조 0). 플러그인은 현재 **ENABLED**.
+**전제(이미 완료)**: RYU 콘텐츠는 `/Game/_RYU_Portable/`에 있고 7레벨 참조 재연결됨(RYU참조 0). 플러그인은 현재 **ENABLED** — uproject Plugins 배열에 항목이 없지만 프로젝트 로컬 플러그인이라 기본 활성이다(위 「반복 금지」 참조). 즉 "이미 껐다"고 착각하지 말 것.
 
 **레벨별 반복 절차**:
 1. 대상 레벨 로드 → RYU빌딩 액터 확인.

@@ -20,8 +20,10 @@ Hucoms PTZ 카메라를 가상으로 재현해, 실기 없이 온보딩·주차�
 
 ## 기술 스택
 
-- Unreal Engine **5.8**, C++ (`Source/baro_unreal/`)
-- 모듈 의존: HTTP / Json / HTTPServer / Sockets / Networking (`baro_unreal.Build.cs`)
+- Unreal Engine **5.8**, C++. CCTV 런타임은 `Plugins/baroCCTVSimulator/`(git submodule)에 있고,
+  호스트 모듈 `Source/baro_unreal/`은 부팅만 담당한다.
+- 모듈 의존: HTTP / HTTPServer(Public) + Json / Sockets / Networking / ImageCore / Projects(Private)
+  — `baroCCTVSimulator.Build.cs`
 - 상용 에셋: BlackAlder, Fab, CityKitBR, Road Creator Pro, UltraDynamicSky, RYU Korean Building Creator 등
 
 ## 저장소 전략 (code-only)
