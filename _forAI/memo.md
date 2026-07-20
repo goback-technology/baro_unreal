@@ -14,16 +14,6 @@
 
 - 엔진: Unreal Engine **5.8** (Windows 11 / PowerShell), **Win64 전용**. Linux/Vulkan 버전은 2026-07-10부로 보류.
 - 프로젝트: `baro_unreal` — C++ 게임 모듈(에디터 타깃 `baro_unrealEditor`)
-
-## 메모리 누수 원인과 대응 (2026-07-20)
-
-- **원인 확정**: UE 5.8에서 Lumen이 활성화된 `SceneCaptureComponent2D`의 `bAlwaysPersistRenderingState=true`가 persistent rendering ViewState를 계속 유지하면서 process RAM을 증가시켰다. JPEG 인코딩, Readback, 소켓 전송, TemporalAA 단독이 주원인은 아니었다.
-- **A/B 검증**: SceneCapture-only 약 `+1.835 MB/s`, `bAlwaysPersistRenderingState=false`는 warm-up 후 약 `-0.253 MB/s`, Lumen off는 약 `+0.086 MB/s`였다. 원래 전체 경로는 약 `+1.2~1.9 MB/s`였다.
-- **수정**: `PTZCaptureComponent.cpp`에서 `bAlwaysPersistRenderingState=false`로 변경해 캡처별 persistent ViewState 보존을 차단했다.
-- **재발 감시**: `BaroSystemMonitorSubsystem`이 1초마다 CPU/RAM/GPU/VRAM/FPS를 수집하고 30초마다 UE 로그와 `Saved/Logs/BaroHealth-*.csv`에 기록한다. 최근 120초 RAM slope가 `20 MB/min`을 넘으면 `LEAK_SUSPECTED`로 표시한다. 큰 일회성 증가(`baro.Health.ResetJumpMB`, 기본 256MB)는 workload transition으로 분리한다.
-- **UI**: `BaroSystemMonitorWidget`이 우상단에 상태, CPU, GPU frame time, RAM/slope, VRAM, FPS를 표시한다. MCP callable tool이 현재 노출되지 않아 `.uasset` WBP 대신 native UMG로 구현했으며 Blueprint/WBP 확장이 가능하다.
-- **최종 검증**: Development 패키지 166초 실행에서 `LEAK_SUSPECTED` 없이 `HEALTHY`를 유지했다. GPU process utilization은 현재 RHI에서 제공되지 않아 `N/A`, GPU frame ms와 VRAM은 표시된다.
-- **별도 관찰**: `TEXTURE STREAMING POOL OVER 59.859 MiB BUDGET`은 이번 CPU 메모리 누수와 별개인 texture streaming budget 경고다. Smart App Control 차단도 로컬 unsigned plugin DLL에 대한 Windows 보안 정책이며, 이교수님이 처리 완료했다.
 - 통합 출처: 레벨=`parking_area`(Parking_Project), CCTV 시뮬=`baro_world 5.8`
 - 배포 기준: Win64 Shipping, 일반 창모드 960×540. Linux 재개는 별도 요청 전까지 범위 밖이다.
 
@@ -35,7 +25,8 @@
 - **스트림**: `StreamFps=30`(DefaultGame.ini 오버라이드 — 코드 기본 15), 1280×720 q80. **스냅샷**: QHD 2560×1440 q92, 워밍업 0.
 - **톤**: 노출 -0.7 + **대비 1.2**(DefaultGame.ini `CaptureContrast` — 코드 기본 1.6은 흰 차+직사광에서 "탄" 세피아, 2026-07-02 실측 개정). 라이브 스윕은 `/api/capture-tuning`.
 - **표준 실행**: `./Scripts/run.ps1`(기본 `-Mode Game`) — `.env`의 `UE_PATH`/`DEFAULT_MAP`/`RUN_RESX`/`RUN_RESY`를 읽어 standalone `UnrealEditor.exe <uproject> -game -windowed -ResX=960 -ResY=540`을 띄운다. `GameDefaultMap=/Game/simulator/LV_Park_sim_01`, `GlobalDefaultGameMode=/Script/baro_unreal.BaroUnrealGameMode`(앱 게임모드 — 플러그인 `ABaroSimGameMode` 상속, HUD만 앱 것으로 교체. 구체 폰 없음·월드 렌더 OFF·커서 표시·**ESC 종료**). 완전 무창은 `-RenderOffscreen -log`(-nullrhi 금지 — SceneCapture가 못 돎).
-- **앱 버전**: `DefaultGame.ini [/Script/EngineSettings.GeneralProjectSettings] ProjectVersion`(현 **0.1.0**). 플러그인 `.uplugin` VersionName(현 0.1.3)과 **별개**다. HUD 제목줄=`baro_unreal v0.1.0`, 그 아래 작은 줄=`plugin baroCCTVSimulator v0.1.3`. 앱 코드 수정 시 ProjectVersion 끝자리 +1.
+- **앱 버전**: `DefaultGame.ini [/Script/EngineSettings.GeneralProjectSettings] ProjectVersion`(현 **0.1.1**). 플러그인 `.uplugin` VersionName(현 0.1.6)과 **별개**다. HUD 제목줄=`baro_unreal v0.1.1`, 그 아래 작은 줄=`plugin baroCCTVSimulator v0.1.6`. 앱 코드 수정 시 ProjectVersion 끝자리 +1.
+- **HWRT Lumen**: `DefaultEngine.ini [/Script/Engine.RendererSettings] r.Lumen.HardwareRayTracing=True` — 캡처 persist 가드(플러그인 v0.1.6)와 짝. 이 줄을 빼면 SW Lumen 폴백 → 가드가 persist 를 꺼 암부 화질이 v0.1.5 수준으로 내려간다(누수는 안 남).
 - **HUD 서빙 주소**: `ABaroUnrealHUD`가 `ISocketSubsystem::GetLocalAdapterAddresses()`로 IPv4를 열거해 첫 줄에 표시한다. `127.`과 **`169.254.`(APIPA 링크로컬)** 를 둘 다 걸러야 한다 — 이 개발 PC엔 169.254가 4개(끊긴 Wi-Fi·블루투스 PAN 등), 실제 LAN은 이더넷 하나(`192.168.0.211`)뿐이다.
 - **배포 창/품질 기본값**: `DefaultGameUserSettings.ini`의 `FullscreenMode=2`(일반 창), 960×540, Epic(3), `sg.ResolutionQuality=100`. 메인 창 크기와 CCTV 캡처(QHD 2560×1440 q92)는 서로 독립이다. Cinematic(4)은 다중 SceneCapture의 VRAM 압박으로 mip/Lumen 품질이 흔들릴 수 있어 강제하지 않는다.
 
@@ -50,7 +41,7 @@
 - **setcenter = 줌 인식 LINEAR 모델**: 델타 = (픽셀오프셋/프레임) × **현재 zoompos의 실효 FOV** × 100. zoompos→HFOV는 cam-001 실측 표(`HucomsProtocol::ZoomPosToHFov` = baro_calory `fov-convert.zoomPosToHFov`와 동일 표 — **한쪽 수정 시 반드시 동기화**). VFOV는 tan 비례 축소. 광각 상수 고정은 줌 배율만큼 과이동(구버그).
 - PTZ 부호·틸트 규약은 dev_log의 "PTZ 좌표·부호 규약(Canonical)" 표를 따른다.
 - `/scene/slots` 표시명은 에디터 Actor Label이 기준이다. 응답은 `id=GetName()`(RPC 안정 식별자)과 `label=GetActorLabel()`(웹 표시명)을 모두 제공한다. 프론트에서 `BP_ParkingSlot_C_*` 이름을 임의 변환하지 않는다.
-- 플러그인 버전은 `baroCCTVSimulator.uplugin` `VersionName`이 단일 출처다. 현재 **0.1.3**(0.1.2=차종 카탈로그 리플렉션, 0.1.3=캡처 VT 스로틀 해제)이며 `/scene/catalog.pluginVersion`, 웹 `/simulator` 씬 카드, `BaroSimHUD`에 표시된다.
+- 플러그인 버전은 `baroCCTVSimulator.uplugin` `VersionName`이 단일 출처다. 현재 **0.1.6**(0.1.2=차종 카탈로그 리플렉션, 0.1.3=캡처 VT 스로틀 해제, 0.1.4=setcenter tan+구면 기하, 0.1.5=캡처 persist off — 0.1.6 으로 대체, 0.1.6=persist HWRT 가드)이며 `/scene/catalog.pluginVersion`, 웹 `/simulator` 씬 카드, `BaroSimHUD`에 표시된다.
 - **SceneCapture 전용 렌더 3중 함정**(캡처가 안 보이거나 뭉개지면 이 순서로 의심): ① 텍스처 스트리머 뷰 미등록(AddViewInformation) ② 폴리지 LOD 줌 보정(LODDistanceFactor) ③ **VT 페이지 스로틀**(`bOverrideVirtualTextureThrottle=true` — 주차라인 데칼 사건 2026-07-10, dev_log 참조).
 - **플러그인은 "최소한의 카메라" — 앱 고유 기능을 넣지 않는다.** HUD·버전 표기·서빙 주소처럼 이 앱에만 필요한 것은 호스트 게임 모듈(`Source/baro_unreal/`)에서 상속으로 해결한다. 플러그인 클래스는 전부 `BAROCCTVSIMULATOR_API` export이고 `DrawHUD()`가 virtual, `ABaroSimGameMode` 생성자가 public이라 `HUDClass` 교체만으로 충분하다. 플러그인 `Build.cs`의 `Sockets`/`Networking`/`Projects`는 Private 의존이라 전이되지 않으니 게임 `Build.cs`에 직접 추가한다. (근거: 3프로젝트 공용 서브모듈 → 한 줄 수정도 버전 범프·풀 리빌드·push·서브모듈 갱신 사슬.)
 - **제어 API 무인증은 의도된 결정**: 씬 제어(8095)와 Hucoms CGI(8081~8084)는 토큰·API키·origin 검사가 없고 `DefaultEngine.ini [HTTPServer.Listeners]`에서 포트별 `BindAddress=any`로 LAN에 열어 둔다. 이 시뮬레이터는 **개발 보조용이며 내부망 전용**이므로 인증을 두지 않는다(2026-07-10 확정). 입력 하드닝은 값 클램핑(차종·색·번호판 정규화)까지가 범위다. MCP(8000)는 override를 주지 않아 localhost로 남는다 — 여기에 `BindAddress=any`를 추가하지 말 것.
@@ -65,6 +56,19 @@
 - **패키징이 `Failed reading oplog from Zen ... Error while copying content to a stream`으로 죽는 건 코드 문제가 아니다.** zenserver는 상주 데몬이 아니라 **sponsor 프로세스(에디터/쿡)가 0이 되면 자결**한다. `BuildCookRun`은 쿡을 별도 프로세스로 돌린 뒤 UAT 본체가 oplog를 되읽어 스테이징하는데, UAT는 sponsor가 아니다(sponsor 슬롯 = UE 프로세스만 쓰는 공유메모리 `SponsorPids[8]`). 쿡이 끝나는 순간 서버가 내려가면 읽기가 스트림 중간에 끊긴다. `--owner-pid`는 종료 신호용이지 sponsor가 아니라 외부에서 심을 방법이 없다. **해법은 재시도**(쿡 결과는 Zen에 온전 → 캐시 히트로 통과). `Scripts/package.ps1`이 Zen 오류일 때만 1회 자동 재시도한다. 진단은 `%LOCALAPPDATA%\UnrealEngine\Common\Zen\Data\logs\zenserver*.log`의 `exiting since sponsor processes are all gone`으로.
 - **클론 직후 `git submodule update --init --recursive` 필수** — `Plugins/baroCCTVSimulator`가 서브모듈이라 빠뜨리면 CCTV 클래스가 통째로 사라진 채 레벨이 열린다(참조 깨짐이 액터 소실로 보임).
 - **uproject Plugins 배열에 없다 = 비활성이 아니다.** 프로젝트 로컬 플러그인은 `EnabledByDefault` 미지정 시 **기본 활성**(`FPlugin::IsEnabledByDefault`: Unspecified → `LoadedFrom == Project`). RYU가 여기 해당한다 — 끄려면 `"Enabled": false`를 명시해야 한다.
+- **DefaultGame.ini 의 GameFeatureData 항목은 삭제도, bIsEditorOnly=False 도 금지.** 에디터/쿡은 GameFeatures 플러그인이 로드되어 이 규칙의 존재를 요구(없으면 쿡 실패)하고, 쿡된 게임엔 모듈이 없어 False 면 부팅마다 Ensure → 오류 보고 중 전 스레드 정지로 영구 먹통 가능(2026-07-17 현장 + 07-20 로컬 2회 재현). 정답은 **bIsEditorOnly=True 유지**(쿡은 만족, 게임은 스캔 스킵).
+- **쿡 중 MCP 자동시작 포트 충돌 = 쿡 실패.** 쿡 커맨드릿이 에디터 사용자 설정(`bAutoStartServer=True`)을 읽어 :8000 리슨을 시도한다. 다른 프로세스(VS Code 등)가 8000 을 쥐고 있으면 그 Error 하나로 쿡 전체가 실패 판정된다. 패키징 전 8000 점유 확인, 충돌 시 `Saved/Config/WindowsEditor/EditorPerProjectUserSettings.ini` 의 `bAutoStartServer` 임시 False(패키징 후 복원).
+
+## 메모리 누수 원인과 대응 (2026-07-20)
+
+- **증상(2026-07-16 현장)**: MJPEG 클라이언트가 붙어 캡처가 도는 동안만 프로세스 CPU 메모리 증가(+1.9~2.2MB/s @30fps 720p), 연결 종료 후 미반환. 35시간 가동 시 OOM(가상 72GiB, Binned3 large pool 살아있는 할당 105GB). 진단 번들 원본: `_localfiles/system_info.zip`.
+- **원인(실측 수렴)**: UE 5.8 엔진 결함 — **소프트웨어 Lumen(SDF 트레이싱) + persistent ViewState SceneCapture** 조합에서 캡처 프레임마다 CPU 할당 미회수. LLM 태그 **`DistanceFields`**(+278MB/2.5분 실측)로 귀속. 라디언스캐시·스크린프로브 템포럴·서피스캐시 피드백·GDF 재캐시 억제·브릭 아틀라스 확대 cvar 전부 무효(A/B 10회). Lumen GI off 또는 ViewState 제거 시에만 소멸. `bAlwaysPersistRenderingState`는 트리거일 뿐 결함 주체가 아니다.
+- **화질 트레이드오프(v0.1.5 의 한계)**: persist 무조건 off 는 누수는 잡지만 ViewState 부재로 캡처에서 Lumen 자체가 꺼져 암부가 뭉개진다(clipLo 15.2%→18.4%, 부스 내부 디테일 소실 — 스냅샷 A/B 실측).
+- **근본 대응(플러그인 v0.1.6 + 앱 설정)**: persist 를 **HWRT Lumen 가용 시에만 허용**하는 가드(`baro.Capture.PersistRenderingState` cvar, 기본 1) + `bUseRayTracingIfEnabled=true`. 앱 쪽 `DefaultEngine.ini r.Lumen.HardwareRayTracing=True`. HWRT 경로는 누수 원천(SDF/GDF 프레임 갱신)을 쓰지 않는다. RT 미지원 GPU 는 자동으로 안전 모드(persist off = v0.1.5 동작)로 강등.
+- **검증 수치(2026-07-20, RTX)**: 구 v0.1.4(persist+SW Lumen) +1.86~2.07MB/s → v0.1.5(persist off) -0.57MB/s(암부 저하) → **v0.1.6(persist+HWRT) +0.053MB/s + 암부 clipLo 14.8%(구 15.2% 대비 개선)**. SW 폴백 가드 -0.343MB/s. 부팅 3/3 클린.
+- **별도 발견 — UE HTTPServer 요청당 누수**: `IHttpRouter` 경로가 요청당 ~16KB(+`jpeg.cgi`는 페이로드 크기만큼 추가, QHD 스냅샷 요청당 ~1.3MB)를 회수하지 않는다(25B 응답 3,598회에 +56MB 실측). **jpeg.cgi 고빈도 폴링은 스트림만큼 위험** — baro_calory 폴링 주기 설계에 반영. 장기 가동 시 스냅샷 폴링을 상시로 돌리지 말 것.
+- **재발 감시**: `BaroSystemMonitorSubsystem`(1s 샘플, 30s CSV·UE 로그, 120s slope, 20MB/min 이상 `LEAK_SUSPECTED`) + `BaroSystemMonitorWidget`(우상단 HUD). CSV=`Saved/Logs/BaroHealth-*.csv`. 큰 일회성 할당은 `baro.Health.ResetJumpMB`(기본 256MB)로 workload transition 분리.
+- **별도 관찰**: `TEXTURE STREAMING POOL OVER` 경고는 이번 CPU 누수와 무관(텍스처 풀 예산). Smart App Control 차단은 unsigned plugin DLL 에 대한 Windows 정책 — 이교수님 처리 완료.
 
 ## RYU 플러그인-프리 베이크 (이어작업 레시피)
 

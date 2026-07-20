@@ -4,7 +4,6 @@
 
 - [Entries](#entries)
 - [PTZ 좌표·부호 규약 (Canonical — 진실의 출처)](#ptz-좌표부호-규약-canonical--진실의-출처)
-- [2026-07-20 메모리 누수 원인 확정과 모니터링](#2026-07-20-메모리-누수-원인-확정과-모니터링)
 
 ## Entries
 
@@ -12,6 +11,15 @@
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
 
+- 2026-07-20 (저녁): **누수 근본 대응(플러그인 v0.1.6 HWRT 가드) + 07-17 먹통 원인 수정·재현 + 패키징 강화. 앱 v0.1.1.**
+  - **아래 (주간) 엔트리 정정 2건**: ① `bAlwaysPersistRenderingState`는 트리거일 뿐 결함 주체가 아니다 — 진범은 **UE 5.8 소프트웨어 Lumen(SDF)의 캡처 프레임당 CPU 미회수**(LLM 태그 `DistanceFields` +278MB/2.5분 실측, 라디언스캐시·템포럴·피드백·GDF·아틀라스 cvar 전부 무효 A/B 10회). ② persist off(v0.1.5)는 **화질 회귀가 실재**한다 — ViewState 부재 = 캡처 Lumen 비활성 → 암부 뭉개짐(clipLo 15.2%→18.4%, 부스 내부 디테일 소실, 스냅샷 A/B 실측). "회귀가 되면 안 된다"(이교수님) → 가드 방식으로 대체.
+  - **근본 수정 = 플러그인 v0.1.6(`00875b8`)**: `baro.Capture.PersistRenderingState` cvar(기본 1) + **HWRT 가용 시에만 persist 허용** 가드 + `bUseRayTracingIfEnabled=true` + Build.cs RHI. 앱 쪽 `DefaultEngine.ini r.Lumen.HardwareRayTracing=True` 신설. **실측: HWRT+persist +0.053MB/s(구 1.86~2.07 → 소멸) + 암부 clipLo 14.8%(구 SW persist 15.2%보다 개선, 선명도 동등)**. SW 폴백(가드 발동) -0.343MB/s. 상세는 memo 「메모리 누수 원인과 대응」.
+  - **07-17 "즉시 먹통" 수정 + 로컬 2회 재현**: 원인 = `DefaultGame.ini` AssetManager 의 GameFeatureData 스캔 항목(bIsEditorOnly=False) — 쿡 게임엔 GameFeatures 모듈이 없어 부팅마다 Ensure, 그 오류 보고 중 전 스레드 정지(로그가 콜스택 직후 끊기고 포트 안 열림 — 현장과 동일 시그니처, 구 v0.1.4 패키지로 재현). **삭제는 오답**(에디터/쿡의 GameFeatures 가 규칙 존재를 요구해 쿡 실패) → **bIsEditorOnly=True 로 정정**. 신규 패키지 부팅 3/3 Ensure 없음.
+  - **CrashReportClient 스테이징**: `package.ps1` UAT 인자에 `-CrashReporter` 추가(BuildCookRun 은 ini 의 IncludeCrashReporter 를 읽지 않음 — 멀티에이전트 감사 확인). 신규 패키지에 `Engine/Binaries/Win64/CrashReportClient.exe`(24.6MB) 스테이징 + "Could not start crash report client" 소멸 확인.
+  - **별도 발견 — UE HTTPServer 요청당 누수**: IHttpRouter 가 요청당 ~16KB(+응답 페이로드 크기)를 회수하지 않음(25B 응답 3,598회 +56MB, QHD jpeg.cgi 요청당 ~1.3MB 실측). jpeg.cgi 상시 폴링 금지 — baro_calory 쪽 폴링 설계에 반영할 것.
+  - **중계(baro_calory) 후속 제안(미적용)**: OOM 당시 8시간 15분 잔존 MJPEG 연결의 보유자는 backend `proxyTcpMjpeg` — 스트림 개시 후 `sock.setTimeout(0)`+무기한 drain 대기+keepalive 부재로 스톨/방치 소비자를 못 끊는다(`server.mjs:715-766`). 워치독 3종(drain 데드라인·양측 keepalive·유휴 타임아웃)+탭 가시성 정책 제안(멀티에이전트 감사, 별도 작업으로).
+  - **함정 기록**: 쿡 커맨드릿이 MCP 자동시작(:8000)을 시도 — VS Code 가 8000 점유 중이면 그 Error 하나로 쿡 실패. 임시로 `bAutoStartServer=False` 후 패키징, 복원함(memo 「반복 금지」).
+  - **버전**: 앱 `ProjectVersion` 0.1.0→**0.1.1**, 플러그인 0.1.5→**0.1.6**(서브모듈 push 완료 — 원격이 `goback-technology/baroCCTVSimulator` 로 이관됨 안내, 구 URL 리다이렉트 동작). 진단 번들은 `_localfiles/system_info.zip`(git 제외).
 - 2026-07-20: **메모리 누수 원인 확정과 모니터링/UI 구현.**
   - **이교수님 보고 요약**: Lumen + `SceneCaptureComponent2D`의 persistent rendering state가 process RAM을 계속 증가시키는 원인이었다. `bAlwaysPersistRenderingState=false`로 수정했고 A/B 및 패키지 실행 검증을 통과했다.
   - **검증 수치**: 원래 경로 `+1.2~1.9 MB/s`, SceneCapture-only `+1.835 MB/s`; NoPersist는 warm-up 후 `-0.253 MB/s`, NoLumen은 `+0.086 MB/s`. JPEG/Readback/socket은 주원인이 아니었다.

@@ -35,8 +35,8 @@
 - `Plugins/baroCCTVSimulator/` — **git submodule**(CCTV 런타임 C++ 단일 소스). 아래 [Submodule 운영](#submodule-운영) 참조.
 - `Plugins/RYUKoreaBuilidngCreator/` — 한국 건물팩(Fab 상용, 콘텐츠 2.6GB + Runtime C++ 모듈, 5.8 재빌드됨). git 미추적.
 - `Content/` — parking_area에서 이관한 30GB 환경. 시뮬 레벨 `simulator/LV_Park_sim_01~03`, 원본 `Levels/LV_Park_01~08`, 대형 에셋팩(BlackAlder/Fab/Cars/Road_Creator_Pro/UltraDynamicSky). git 미추적.
-- `Config/` — 5개 파일: `DefaultEditor.ini`, `DefaultEngine.ini`(RHI·맵·게임모드·`[HTTPServer.Listeners]`), `DefaultGame.ini`(플러그인 서브시스템 설정 + `[GeneralProjectSettings] ProjectVersion` = **앱 버전**, 현 0.1.0), `DefaultGameUserSettings.ini`(배포 기본 960×540 일반 창모드 `FullscreenMode=2` + Epic 품질·`sg.ResolutionQuality=100`), `DefaultInput.ini`(창모드 고정을 위해 `bAltEnterTogglesFullscreen=False` / `bF11TogglesFullscreen=False`).
-  - MCP 자동시작은 `Saved/Config/.../EditorPerProjectUserSettings.ini`(git 미추적).
+- `Config/` — 5개 파일: `DefaultEditor.ini`, `DefaultEngine.ini`(RHI·맵·게임모드·`[HTTPServer.Listeners]` + **`r.Lumen.HardwareRayTracing=True`** — 캡처 persist 가드와 짝, memo 「메모리 누수 원인과 대응」), `DefaultGame.ini`(플러그인 서브시스템 설정 + `[GeneralProjectSettings] ProjectVersion` = **앱 버전**, 현 **0.1.1** + AssetManager **GameFeatureData 항목 bIsEditorOnly=True 필수** — memo 「반복 금지」), `DefaultGameUserSettings.ini`(배포 기본 960×540 일반 창모드 `FullscreenMode=2` + Epic 품질·`sg.ResolutionQuality=100`), `DefaultInput.ini`(창모드 고정을 위해 `bAltEnterTogglesFullscreen=False` / `bF11TogglesFullscreen=False`).
+  - MCP 자동시작은 `Saved/Config/.../EditorPerProjectUserSettings.ini`(git 미추적). ⚠ 쿡 중 :8000 점유 프로세스가 있으면 쿡이 실패한다(memo 「반복 금지」).
 - `Scripts/` — `common.ps1`(.env 로더 + `Get-BaroSetting`/`Assert-BaroFile` 헬퍼), `build.ps1`, `run.ps1`, `package.ps1`.
 - `docs/` — `windows_build_run.md`(팀원 온보딩: 준비물·서브모듈·`.env`·빌드/실행·트러블슈팅), `scene-control-api.md`(`/scene/*` REST 레퍼런스 + 3D→2D 투영), `sangmyung_team_request.md`(상명대 에셋팀 협업 요청서), `outputs/`(생성 PDF, git 미추적).
 - `.env` / `.env.example` — PC별 로컬 설정. `UE_PATH`, `DEFAULT_MAP=/Game/simulator/LV_Park_sim_01`, `RUN_RESX=960`, `RUN_RESY=540`, `RUN_WINDOWED=true`, (옵션) `PACKAGED_EXE`. `.env`는 git 미추적 — `.env.example`을 복사해 쓴다.
@@ -58,7 +58,7 @@
 ## Submodule 운영
 
 - 정의: `.gitmodules` → `Plugins/baroCCTVSimulator` = `https://github.com/gbox3d/baroCCTVSimulator.git`
-- 현재 핀: `ea38976`(heads/main, `.uplugin` VersionName **0.1.3**)
+- 현재 핀: `00875b8`(heads/main, `.uplugin` VersionName **0.1.6** — persist HWRT 가드). 원격이 `goback-technology/baroCCTVSimulator` 로 이관됨(구 `gbox3d/...` URL 은 리다이렉트로 동작 — `.gitmodules` 갱신은 선택).
 - 클론 직후 필수: `git submodule update --init --recursive` (빠뜨리면 플러그인 없이 열려 CCTV 전부 실종)
 - 갱신 흐름: 서브모듈에서 커밋/푸시 → 부모에서 포인터 bump → `chore: baroCCTVSimulator 서브모듈 갱신 → <sha>` 커밋.
 
@@ -79,7 +79,9 @@
   ```
   RunUAT BuildCookRun 래퍼. 실행 전 `Packaged/Win64`를 경로 확인 후 비워, 과거 `Saved/GameUserSettings.ini`와 구 바이너리가 배포본에 섞이지 않게 한다.
   UAT 출력은 `Saved/Logs/package-uat.log`에 티잉되고, **Zen oplog 오류일 때만 1회 자동 재시도**한다(zenserver sponsor 경쟁 조건 — `memo.md` 「반복 금지」). 컴파일·쿡 에러는 재시도 없이 즉시 실패한다.
+  **`-CrashReporter`** 로 CrashReportClient 를 함께 스테이징한다(BuildCookRun 은 ini 의 IncludeCrashReporter 를 읽지 않음 — 2026-07-20).
   ⚠️ 실행 중인 패키지 인스턴스가 있으면 아카이브 정리 단계가 파일락에 걸린다 — 패키징 전에 닫을 것.
+  ⚠️ :8000 을 다른 프로세스가 쥐고 있으면 쿡 커맨드릿의 MCP 자동시작 실패 Error 로 쿡이 실패한다(memo 「반복 금지」).
 - **패키지 실행 검증**: `Packaged/Win64/baro_unreal.exe` 실행 → 로그 `[Hucoms] 시뮬레이터 서버 시작 — 채널 N/N` 확인. 실 게임/소켓은 **자식 프로세스**(Shipping은 `baro_unreal-Win64-Shipping.exe`)가 소유하므로 **포트 기준**으로 확인:
   ```powershell
   Get-NetTCPConnection -State Listen -LocalPort 8081,8082,8091,8092,8095
