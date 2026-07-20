@@ -58,3 +58,4 @@ Plugins/*
 
 docs/outputs/
 .env
+_localfiles/
