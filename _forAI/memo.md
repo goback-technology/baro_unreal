@@ -7,12 +7,23 @@
 - [런타임 구조 메모](#런타임-구조-메모)
 - [동작 규칙](#동작-규칙)
 - [반복 금지](#반복-금지)
+- [메모리 누수 원인과 대응 (2026-07-20)](#메모리-누수-원인과-대응-2026-07-20)
 - [RYU 플러그인-프리 베이크 (이어작업 레시피)](#ryu-플러그인-프리-베이크-이어작업-레시피)
 
 ## 제품 기준선
 
 - 엔진: Unreal Engine **5.8** (Windows 11 / PowerShell), **Win64 전용**. Linux/Vulkan 버전은 2026-07-10부로 보류.
 - 프로젝트: `baro_unreal` — C++ 게임 모듈(에디터 타깃 `baro_unrealEditor`)
+
+## 메모리 누수 원인과 대응 (2026-07-20)
+
+- **원인 확정**: UE 5.8에서 Lumen이 활성화된 `SceneCaptureComponent2D`의 `bAlwaysPersistRenderingState=true`가 persistent rendering ViewState를 계속 유지하면서 process RAM을 증가시켰다. JPEG 인코딩, Readback, 소켓 전송, TemporalAA 단독이 주원인은 아니었다.
+- **A/B 검증**: SceneCapture-only 약 `+1.835 MB/s`, `bAlwaysPersistRenderingState=false`는 warm-up 후 약 `-0.253 MB/s`, Lumen off는 약 `+0.086 MB/s`였다. 원래 전체 경로는 약 `+1.2~1.9 MB/s`였다.
+- **수정**: `PTZCaptureComponent.cpp`에서 `bAlwaysPersistRenderingState=false`로 변경해 캡처별 persistent ViewState 보존을 차단했다.
+- **재발 감시**: `BaroSystemMonitorSubsystem`이 1초마다 CPU/RAM/GPU/VRAM/FPS를 수집하고 30초마다 UE 로그와 `Saved/Logs/BaroHealth-*.csv`에 기록한다. 최근 120초 RAM slope가 `20 MB/min`을 넘으면 `LEAK_SUSPECTED`로 표시한다. 큰 일회성 증가(`baro.Health.ResetJumpMB`, 기본 256MB)는 workload transition으로 분리한다.
+- **UI**: `BaroSystemMonitorWidget`이 우상단에 상태, CPU, GPU frame time, RAM/slope, VRAM, FPS를 표시한다. MCP callable tool이 현재 노출되지 않아 `.uasset` WBP 대신 native UMG로 구현했으며 Blueprint/WBP 확장이 가능하다.
+- **최종 검증**: Development 패키지 166초 실행에서 `LEAK_SUSPECTED` 없이 `HEALTHY`를 유지했다. GPU process utilization은 현재 RHI에서 제공되지 않아 `N/A`, GPU frame ms와 VRAM은 표시된다.
+- **별도 관찰**: `TEXTURE STREAMING POOL OVER 59.859 MiB BUDGET`은 이번 CPU 메모리 누수와 별개인 texture streaming budget 경고다. Smart App Control 차단도 로컬 unsigned plugin DLL에 대한 Windows 보안 정책이며, 이교수님이 처리 완료했다.
 - 통합 출처: 레벨=`parking_area`(Parking_Project), CCTV 시뮬=`baro_world 5.8`
 - 배포 기준: Win64 Shipping, 일반 창모드 960×540. Linux 재개는 별도 요청 전까지 범위 밖이다.
 

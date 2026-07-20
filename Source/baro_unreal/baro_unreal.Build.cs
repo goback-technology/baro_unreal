@@ -16,11 +16,10 @@ public class baro_unreal : ModuleRules
 		// 플러그인의 Sockets/Projects 는 Private 의존이라 전이되지 않는다 — 여기서 직접 가져온다.
 		//   Sockets  = ISocketSubsystem/FInternetAddr (HUD 의 LAN 주소 열거)
 		//   Projects = IPluginManager (플러그인 버전 표시)
-		PrivateDependencyModuleNames.AddRange(new string[] { "Sockets", "Projects" });
+		// UMG/Slate: 패키지에서도 동작하는 시스템 상태 패널.
+		// RHI: GPU frame time, 프로세스 GPU 사용률(드라이버 지원 시), VRAM budget/usage.
+		PrivateDependencyModuleNames.AddRange(new string[] { "Sockets", "Projects", "UMG", "Slate", "SlateCore", "RHI" });
 
-		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
-		
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");
 

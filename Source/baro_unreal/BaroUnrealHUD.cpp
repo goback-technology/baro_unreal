@@ -1,5 +1,7 @@
 ﻿#include "BaroUnrealHUD.h"
 
+#include "BaroSystemMonitorWidget.h"
+#include "Blueprint/UserWidget.h"
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
 #include "HucomsServerSubsystem.h"
@@ -28,6 +30,32 @@ namespace
 		}
 		return TEXT("?");
 	}
+}
+
+void ABaroUnrealHUD::BeginPlay()
+{
+	Super::BeginPlay();
+
+	UWorld* World = GetWorld();
+	if (World && World->WorldType == EWorldType::Game && GetOwningPlayerController())
+	{
+		SystemMonitorWidget = CreateWidget<UBaroSystemMonitorWidget>(
+			GetOwningPlayerController(), UBaroSystemMonitorWidget::StaticClass(), TEXT("BaroSystemMonitor"));
+		if (SystemMonitorWidget)
+		{
+			SystemMonitorWidget->AddToViewport(100);
+		}
+	}
+}
+
+void ABaroUnrealHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (SystemMonitorWidget)
+	{
+		SystemMonitorWidget->RemoveFromParent();
+		SystemMonitorWidget = nullptr;
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 TArray<FString> ABaroUnrealHUD::GatherLanAddresses()

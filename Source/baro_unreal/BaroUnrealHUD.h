@@ -4,6 +4,8 @@
 #include "GameFramework/HUD.h"
 #include "BaroUnrealHUD.generated.h"
 
+class UBaroSystemMonitorWidget;
+
 /**
  * ABaroUnrealHUD — baro_unreal 앱 전용 standalone HUD.
  *
@@ -25,6 +27,8 @@ class ABaroUnrealHUD : public AHUD
 	GENERATED_BODY()
 
 public:
+	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void DrawHUD() override;
 
 private:
@@ -34,6 +38,10 @@ private:
 	/** 어댑터 주소는 프레임마다 바뀌지 않는다 — 첫 DrawHUD 에서 한 번만 열거해 캐시. */
 	TArray<FString> CachedAddresses;
 	bool bAddressesResolved = false;
+
+	/** 우측 상단 시스템 상태 UMG. 좌측 Canvas HUD와 독립적으로 갱신된다. */
+	UPROPERTY(Transient)
+	TObjectPtr<UBaroSystemMonitorWidget> SystemMonitorWidget;
 
 	/** 루프백이 아닌 IPv4 어댑터 주소. [0] = OS 기본 경로 어댑터(판별되면). */
 	static TArray<FString> GatherLanAddresses();

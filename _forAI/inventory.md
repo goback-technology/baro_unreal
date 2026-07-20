@@ -26,8 +26,10 @@
   - 런타임: `PCG`, `Niagara`, `DatasmithContent`, `VariantManager`, `CineCameraSceneCapture`, `GeometryScripting`, **`baroCCTVSimulator`**.
   - ⚠️ **`RYUKoreaBuilidngCreator`는 uproject Plugins 배열에 항목이 없을 뿐 여전히 활성(enabled)이다.** UE는 프로젝트 로컬 플러그인(`<Project>/Plugins/`)의 `EnabledByDefault` 미지정 시 기본 enabled로 취급한다(`FPlugin::IsEnabledByDefault` — Unspecified → `LoadedFrom == Project`). 실제로 `Plugins/RYUKoreaBuilidngCreator/Binaries/Win64/UnrealEditor-RYUKoreaBuilidngCreator.dll`이 빌드돼 있다. 진짜로 끄려면 uproject에 `{"Name":"RYUKoreaBuilidngCreator","Enabled":false}`를 명시하거나 `.uplugin`에 `"EnabledByDefault": false`를 넣어야 한다. 미베이크 원본 레벨(`LV_Park_01/04/07_A`, `Unity/LV_Park_01_U/04_U`)이 아직 이 플러그인을 필요로 하므로 지금 끄면 안 된다(`plan.md`).
 - `Source/` — 호스트 게임 모듈. CCTV 런타임 구현은 전부 플러그인에 있고, 여기엔 **부팅 + 앱 고유 표시**만 둔다.
-  - `baro_unreal.Build.cs` — Public: Core/CoreUObject/Engine/InputCore/EnhancedInput + **`baroCCTVSimulator`**. Private: **`Sockets`**(`ISocketSubsystem` — HUD의 LAN 주소 열거), **`Projects`**(`IPluginManager` — 플러그인 버전 표시). 플러그인의 Sockets/Networking/Projects는 Private 의존이라 전이되지 않으므로 직접 가져와야 한다.
-  - `BaroUnrealHUD.{h,cpp}` — 앱 HUD(`AHUD` 직접 상속). 제목줄 = 앱 버전, 그 아래 플러그인 버전, **외부 접속 가능한 LAN 서빙 주소**(`127.`/`169.254.` 필터), 채널 상태, 게임 틱 fps, ESC 안내.
+  - `baro_unreal.Build.cs` — Public: Core/CoreUObject/Engine/InputCore/EnhancedInput + **`baroCCTVSimulator`**. Private: **`Sockets`**, **`Projects`**, **`UMG`**, **`Slate`**, **`SlateCore`**, **`RHI`**.
+  - `BaroUnrealHUD.{h,cpp}` — 앱 HUD(`AHUD` 직접 상속). 기존 텍스트 HUD와 시스템 상태 위젯을 함께 표시한다.
+  - `BaroSystemMonitorSubsystem.{h,cpp}` — 1초 주기 CPU/RAM/GPU/VRAM/FPS 샘플링, 30초 UE 로그·CSV 저장, RAM 증가율 기반 상태 판정.
+  - `BaroSystemMonitorWidget.{h,cpp}` — 우상단 native UMG 시스템 상태 패널. Blueprintable이므로 향후 WBP에서 레이아웃/스타일을 교체할 수 있다.
   - `BaroUnrealGameMode.{h,cpp}` — `ABaroSimGameMode` 상속, 생성자에서 `HUDClass`만 앱 HUD로 교체. 나머지(SpectatorPawn·월드 렌더 OFF·ESC)는 부모 그대로.
 - `Source/*.Target.cs` — `BuildSettingsVersion.V7` / `EngineIncludeOrderVersion.Unreal5_8`, `[SupportedPlatforms("Win64")]`.
 - `Plugins/baroCCTVSimulator/` — **git submodule**(CCTV 런타임 C++ 단일 소스). 아래 [Submodule 운영](#submodule-운영) 참조.
@@ -90,6 +92,8 @@
 - Win64 Shipping 클린 패키징: `./Scripts/package.ps1 -Config Shipping -Clean`.
 - 배포 EXE는 추가 인자 없이 직접 실행해 client 960×540, caption/resize frame, non-maximized인지 확인한다. 실행 전 아카이브에 `baro_unreal/Saved`가 없어야 한다.
 - 런타임 검증: D3D12 모듈 로드, 포트 리슨, `/scene/catalog` 200(`pluginVersion` 확인), `/cgi-bin/image/jpeg.cgi` 2560×1440. 2026-07-10 Shipping 검증 통과.
+- 메모리 모니터 CSV: 패키지 기준 `Saved/Logs/BaroHealth-YYYYMMDD-HHMMSS.csv`. 1초 샘플, 30초 기록이며 `MemorySlopeMBPerMin`과 `State`를 확인한다.
+- 2026-07-20 Development 패키지 검증: workload RAM jump를 trend에서 분리했고, 166초 동안 `LEAK_SUSPECTED` 없이 RAM 감소 추세 및 `HEALTHY`를 확인했다.
 
 ## Notes
 

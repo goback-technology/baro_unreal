@@ -4,12 +4,21 @@
 
 - [Entries](#entries)
 - [PTZ 좌표·부호 규약 (Canonical — 진실의 출처)](#ptz-좌표부호-규약-canonical--진실의-출처)
+- [2026-07-20 메모리 누수 원인 확정과 모니터링](#2026-07-20-메모리-누수-원인-확정과-모니터링)
 
 ## Entries
 
 > **최신순(내림차순)**. 새 엔트리는 이 목록 맨 위에 추가한다.
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
+
+- 2026-07-20: **메모리 누수 원인 확정과 모니터링/UI 구현.**
+  - **이교수님 보고 요약**: Lumen + `SceneCaptureComponent2D`의 persistent rendering state가 process RAM을 계속 증가시키는 원인이었다. `bAlwaysPersistRenderingState=false`로 수정했고 A/B 및 패키지 실행 검증을 통과했다.
+  - **검증 수치**: 원래 경로 `+1.2~1.9 MB/s`, SceneCapture-only `+1.835 MB/s`; NoPersist는 warm-up 후 `-0.253 MB/s`, NoLumen은 `+0.086 MB/s`. JPEG/Readback/socket은 주원인이 아니었다.
+  - **재발 방지**: `BaroSystemMonitorSubsystem`이 1초 샘플링, 30초 UE log/CSV, 최근 120초 RAM slope 판정(`20 MB/min` 이상이면 leak 의심)을 수행한다. 큰 일회성 자원 할당은 `baro.Health.ResetJumpMB=256` 기준 workload transition으로 분리한다.
+  - **UI**: `BaroSystemMonitorWidget` native UMG를 `BaroUnrealHUD`에 추가했다. 우상단에 상태/CPU/RAM/GPU frame time/VRAM/FPS를 표시하며 Blueprint/WBP로 확장 가능하다. 현재 MCP callable tool이 노출되지 않아 `.uasset` WBP 대신 native layout을 사용했다.
+  - **최종 실행**: `Packaged/Win64/baro_unreal.exe` Development 빌드 166초 실행, `LEAK_SUSPECTED` 없이 `HEALTHY` 유지. CSV는 `Saved/Logs/BaroHealth-20260720-173441.csv`에 남겼다. GPU 사용률은 RHI 미지원으로 `N/A`다.
+  - **별도 이슈**: Texture Streaming Pool `+59.859 MiB` 경고는 이번 RAM 누수와 별개다. Smart App Control 차단은 로컬 unsigned plugin DLL에 대한 Windows 보안 정책이며 이교수님이 처리 완료했다.
 
 - 2026-07-10 (저녁): **앱 전용 HUD(앱 버전 + 외부 접속 주소) · 패키징 Zen 경쟁조건 규명/가드 · 브랜치 재편.**
   - **플러그인 무수정 원칙 확립(이교수님 지시).** `baroCCTVSimulator`는 "최소한의 카메라"다. 앱 고유 표시는
