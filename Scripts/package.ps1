@@ -82,6 +82,9 @@ $uatArgs = @(
     "-archive"
     "-archivedirectory=$Archive"
     "-utf8output"
+    # CrashReportClient 를 함께 스테이징 — BuildCookRun 은 ini(IncludeCrashReporter)를 읽지 않아
+    # 이 플래그가 없으면 크래시 시 "Could not start crash report client"로 덤프가 유실된다(2026-07-17 사고).
+    "-CrashReporter"
 )
 if ($noDebug) { $uatArgs += "-nodebuginfo" }
 if ($Clean)   { $uatArgs += "-clean" }
