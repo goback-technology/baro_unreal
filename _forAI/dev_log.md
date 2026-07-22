@@ -64,6 +64,13 @@
     서브모듈 `origin` **3계층 전부** 확인했고(`git submodule sync --recursive`), 새 URL 로 `ls-remote` 가
     같은 커밋(`261edfa`)을 반환하는 것까지 검증했다. 참고: 교체 전 API 조회로 `gbox3d/...` 의 정식 이름이
     `goback-technology/...` 임을 확인 — 리다이렉트는 그때까지 정상 동작 중이었다(선제 정리).
+    **전 저장소 원격 전수 점검(이교수님 "위험요소는 모두")**: 같은 종류가 하나 더 있었다 —
+    `baroQuantum` **자신의 origin** 도 `gbox3d/baroQuantum`(→ `goback-technology/baroQuantum` 리다이렉트)
+    이었다. `git remote set-url` 로 교체(로컬 `.git/config` 이므로 커밋 대상 아님 — **새로 클론하는 사람은
+    처음부터 정식 주소를 써야 한다**). 비공개 저장소는 익명 API 가 404 라 `gh` 인증 조회로 확인했다
+    (`baro_calory`·`myAISkills` 는 처음부터 정식). 최종 상태: **7개 원격 + 2개 `.gitmodules` 전부 정식,
+    리다이렉트 의존 0건**. 조직 이관 정리: 업무 저장소는 `goback-technology/*`, 개인 것(`ready_unreal`,
+    `myAISkills`)은 `gbox3d/*` 로 정상.
   - **플랫폼: 당분간 Windows 전용 재확인(이교수님)**. 이유는 **Linux 화질 손상** — Vulkan 오프스크린에서
     VT 피드백이 동작하지 않아 주차면 라인 데칼이 렌더되지 않는다(2026-07-10 실측, `plan.md` Structure
     decisions). 서브모듈 `_forAI` 에도 "검증 플랫폼 = Windows/Win64 전용"과 그 이유를 명시했다 —
