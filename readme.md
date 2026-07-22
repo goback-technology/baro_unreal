@@ -110,6 +110,28 @@ notepad .env
 
 결과물은 `Packaged/Win64/baro_unreal.exe`에 생성된다.
 
+### 배포본(zip) 만들기
+
+```powershell
+.\Scripts\package.ps1 -Zip                  # Development (로그·심볼 포함)
+.\Scripts\package.ps1 -Config Shipping -Zip # Shipping (최적화·심볼 제외)
+```
+
+`-Config`를 생략하면 **Development**가 압축된다 — 배포 전에 어느 쪽을 보낼지 의식적으로 고를 것.
+현재 현장 배포본은 **Development**다. 메모리 누수 재발을 감시하는 동안에는 로그와
+`Saved/Logs/BaroHealth-*.csv`가 필요하고, Shipping은 `ensure`가 컴파일 아웃되어 이상을 조용히 숨기기 때문이다.
+감시가 끝나면 Shipping으로 전환한다.
+
+`Packaged/`에 `baro_unreal_sim_v<앱버전>_<yyyyMMdd>.zip`과 `.sha256`, `.info.txt`가 함께 생성된다.
+이름의 버전은 **앱 버전**(`Config/DefaultGame.ini`의 `ProjectVersion`)에서 자동으로 만든다 — 손으로 짓지 않는다.
+플러그인 버전은 이름에 넣지 않고 `.info.txt`에 앱/플러그인 버전과 양쪽 커밋 SHA를 함께 기록한다.
+
+> 2026-07-20 이전 수동 zip은 **플러그인** 버전으로 이름을 붙였다(`v0.1.4` = 플러그인, 당시 앱은 `0.1.0`).
+> 이름만으로 무엇의 버전인지 알 수 없어 혼동이 있었고, 그래서 앱 버전 기준으로 통일했다.
+> 앱 `0.2.0`부터가 새 규약이며, 그 이전 zip과는 숫자를 직접 비교하지 말 것.
+
+이미 같은 이름이 있으면 실패한다(배포한 산출물 보호). 덮어쓰려면 `-Force`를 준다.
+
 ### 실행 확인
 
 ```powershell

@@ -11,6 +11,35 @@
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
 
+- 2026-07-22: **배포 zip 이름을 앱 버전 기준으로 통일 + 앱 v0.2.0 (코드 변경 없음, 패키징 규약 릴리스).**
+  - **문제(이교수님 지적)**: 기존 배포본 `baro_unreal_sim_v0.1.4_20260714.zip` 의 `0.1.4` 는 **플러그인** 버전이었고
+    그때 앱 `ProjectVersion` 은 `0.1.0` 이었다. 이름만으로 무엇의 버전인지 알 수 없어, 배포본을 대표하는
+    버전이 무엇인지 매번 되짚어야 했다. zip 이 **수동 생성**이었던 것이 근본 원인이다(`package.ps1` 은
+    `Packaged/Win64` 까지만 만들었다).
+  - **수정 = `package.ps1 -Zip` / `-Force` 신설**: 패키징 후 `Packaged\baro_unreal_sim_v<앱버전>_<yyyyMMdd>.zip`
+    + `.sha256`(`<hash> *<name>`, 기존 사이드카와 동일 형식) + `.info.txt`(앱/플러그인 버전·Config·Map·양쪽 커밋 SHA,
+    워킹트리가 더러우면 `-dirty`)를 만든다. 이름은 `Config/DefaultGame.ini` 의 `ProjectVersion` 을 파싱해
+    **자동 생성** — 손으로 짓는 경로를 없앤 것이 이 변경의 핵심이다. 압축 직전 아카이브의 `baro_unreal\Saved`
+    를 제거하고(실행 흔적 배제 규약 자동화), 동명 파일이 있으면 실패한다(`-Force` 로만 덮어쓰기).
+    구조는 `includeBaseDirectory=false` 로 Win64 폴더의 **내용**이 zip 루트에 온다(기존 zip 과 동일).
+  - **왜 0.1.2 가 아니라 0.2.0 인가**: 앱 `0.1.1` 로 이름을 붙이면 옛 zip `v0.1.4`(플러그인 이름)보다 숫자가
+    작아 **다운그레이드로 보인다**. 숫자 역전을 없애려고 minor 를 올렸다. **코드는 0.1.1 과 동일하고
+    변경은 `Scripts/package.ps1` 과 문서뿐**이다. 이에 맞춰 범프 규칙에 "배포 규약이 바뀌는 릴리스는 minor +1"
+    을 추가했다(memo 「기본 설정값」).
+  - **산출물 검증**: `baro_unreal_sim_v0.2.0_20260722.zip` 2.78GB — pak 안 `ProjectVersion=0.2.0`·플러그인
+    `0.1.6`, 런타임 로그 `Set ProjectVersion to 0.2.0`, `/scene/catalog.pluginVersion=0.1.6`,
+    zip 파일 54/54 일치·누락 0, `baro_unreal/Saved` 0건, sha256 사이드카 실제 해시와 일치,
+    부팅 Ensure 0(`Saved/Crashes` 비어 있음). Config 는 **Development**(누수 감시 중이라 로그·`BaroHealth-*.csv`
+    가 필요하고 Shipping 은 `ensure` 가 컴파일 아웃돼 이상을 숨긴다 — 감시 종료 후 Shipping 전환).
+  - **문서 정합(적대적 감사 반영)**: `readme.md` 「배포본(zip) 만들기」 신설(Development/Shipping 선택 명시),
+    `docs/windows_build_run.md` 「배포본(zip) 만들기」 신설(팀원이 폴더를 손으로 압축하지 않도록),
+    `_forAI` README/inventory/memo 의 앱 버전 스냅샷 `0.2.0` + zip 규약, `docs/scene-control-api.md` 기준
+    플러그인 버전 `0.1.1→0.1.6` 및 **`cars[]` 필드 누락 보강**(v0.1.2부터 `BP_Car.Mesh_List` 리플렉션으로
+    동적 — 실측 캡처로 확인, `carType` 범위를 `0..carCount-1` 로 정정).
+  - **미처리(별건)**: 서브모듈 `Plugins/baroCCTVSimulator/_forAI` 의 memo/inventory 가 아직 플러그인 `0.1.1`
+    이라고 적고 있다(실제 `0.1.6`). 3프로젝트 공유 저장소라 고치면 서브모듈 커밋 → 부모 핀 범프 사슬이
+    생기므로 이번 릴리스에 묶지 않았다. **이교수님 승인 후 docs-only 커밋으로 별도 처리**할 것.
+
 - 2026-07-20 (저녁): **누수 근본 대응(플러그인 v0.1.6 HWRT 가드) + 07-17 먹통 원인 수정·재현 + 패키징 강화. 앱 v0.1.1.**
   - **아래 (주간) 엔트리 정정 2건**: ① `bAlwaysPersistRenderingState`는 트리거일 뿐 결함 주체가 아니다 — 진범은 **UE 5.8 소프트웨어 Lumen(SDF)의 캡처 프레임당 CPU 미회수**(LLM 태그 `DistanceFields` +278MB/2.5분 실측, 라디언스캐시·템포럴·피드백·GDF·아틀라스 cvar 전부 무효 A/B 10회). ② persist off(v0.1.5)는 **화질 회귀가 실재**한다 — ViewState 부재 = 캡처 Lumen 비활성 → 암부 뭉개짐(clipLo 15.2%→18.4%, 부스 내부 디테일 소실, 스냅샷 A/B 실측). "회귀가 되면 안 된다"(이교수님) → 가드 방식으로 대체.
   - **근본 수정 = 플러그인 v0.1.6(`00875b8`)**: `baro.Capture.PersistRenderingState` cvar(기본 1) + **HWRT 가용 시에만 persist 허용** 가드 + `bUseRayTracingIfEnabled=true` + Build.cs RHI. 앱 쪽 `DefaultEngine.ini r.Lumen.HardwareRayTracing=True` 신설. **실측: HWRT+persist +0.053MB/s(구 1.86~2.07 → 소멸) + 암부 clipLo 14.8%(구 SW persist 15.2%보다 개선, 선명도 동등)**. SW 폴백(가드 발동) -0.343MB/s. 상세는 memo 「메모리 누수 원인과 대응」.

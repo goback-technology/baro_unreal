@@ -4,7 +4,7 @@ UE 시뮬레이터의 씬(주차면·차량·카메라 파라미터)을 **실행
 `baroCCTVSimulator` 플러그인의 `USceneControlSubsystem`이 구현하며, baro_calory(Node 백엔드)의
 `/api/simulator/*`가 이 API를 그대로 프록시한다. 웹UI·CLI·(향후) MCP가 전부 이 하나의 제어면을 공유한다.
 
-> 문서 기준: 플러그인 v0.1.1 (2026-07-08). 응답 예시는 전부 실측 캡처.
+> 문서 기준: 플러그인 v0.1.6 (2026-07-22). 응답 예시는 전부 실측 캡처.
 
 ## 목차
 
@@ -89,8 +89,9 @@ ParkingSlotClassPrefix=BP_ParkingSlot
 ```json
 {
   "level": "LV_Park_sim_01",
-  "pluginVersion": "0.1.1",
+  "pluginVersion": "0.1.6",
   "carCount": 23,
+  "cars": [ { "index": 0, "name": "BMW 1시리즈", "asset": "BMW_1시리즈" }, ... carCount 개 ],
   "colors": [ { "index": 0, "name": "화이트", "rgb": [0.94, 0.94, 0.90] }, ... 8종 ],
   "plateTypes": [ { "index": 0, "name": "일반" }, { "index": 1, "name": "영업용" }, { "index": 2, "name": "전기차" } ],
   "korList": ["가", "나", "다", "라", "마"]
@@ -99,6 +100,9 @@ ParkingSlotClassPrefix=BP_ParkingSlot
 
 - `pluginVersion`은 `.uplugin`의 `VersionName`을 `IPluginManager`로 런타임 조회한 값 — 배포된 빌드가
   어느 플러그인인지 즉시 식별(웹 `/simulator` 씬 카드에 표시됨).
+- `cars[]`는 **v0.1.2부터** `BP_Car.Mesh_List` CDO 리플렉션으로 채워진다. `carCount`는 그 길이이며
+  구 계약을 그대로 유지한다(리플렉션 실패 시에만 과거 상수 23으로 폴백하고 `cars[]`는 비어 나간다).
+  차종을 하드코딩하지 말고 이 배열을 쓸 것 — 에셋이 늘면 자동으로 따라온다.
 
 ### GET /scene/slots
 
@@ -216,7 +220,7 @@ POST = 스폰. `slotId`(슬롯 배치, 트랜스폼은 슬롯 것) 또는 `trans
 - 점유된 슬롯이면 `409`(`force: true`로 덮어쓰기 허용). 없는 슬롯이면 `404`.
 - 응답 = `{ "car": { ...스폰된 차량 상태... } }`. `id`는 `car-01`, `car-02`... 순번.
 - 값 범위는 서버가 클램프하지만, baro_calory 라우터가 프록시 전에 `400`으로 먼저 거른다
-  (carType 0..22, color 0..7, plate.type 0..2).
+  (carType 0..carCount-1, color 0..7, plate.type 0..2).
 - **번호판 정규화**: 한국 신형(앞 3자리 + 한글 1자 + 뒤 4자리, 예 `123가4567`)으로 자릿수를 서버가
   정규화한다(`NormalizeKoreanPlate` — BP_Plate의 파싱이 이 자릿수를 전제). 저장값 = 렌더값.
   `city`는 별도 TextRender라 임의 문자열.
@@ -243,7 +247,7 @@ UE 쪽 상수(SceneControlSubsystem.cpp)가 동일해야 한다 — 한쪽을 �
 
 | 필드 | 범위 | 의미 |
 |---|---|---|
-| `carType` | 0..22 (23종) | BP_Car `selected_Car` (mesh_List 인덱스) |
+| `carType` | 0..carCount-1 | `/scene/catalog` 의 `cars[]` 인덱스 (v0.1.2부터 동적, 현재 23종) |
 | `color` | 0..7 (8색) | BP_Car `selected_Color` (화이트/블랙/실버/그레이/레드/옐로/그린/블루) |
 | `plate.type` | 0..2 | BP_Plate 메시 (일반/영업용/전기차) |
 | `plate.prefix` | 숫자 3자리 | 번호판 앞자리 (정규화됨) |
@@ -336,7 +340,7 @@ pnpm sim:catalog && pnpm sim:slots && pnpm sim:cars     # CLI 하네스
 
 ## 버전·소스 위치
 
-- 버전 규칙: 플러그인 `.uplugin` `VersionName` = **0.1.0 시작, 수정 시 끝자리 +1**. 현재 문서 기준은 **0.1.1**.
+- 버전 규칙: 플러그인 `.uplugin` `VersionName` = **0.1.0 시작, 수정 시 끝자리 +1**. 현재 문서 기준은 **0.1.6**.
   런타임 확인 = `/scene/catalog.pluginVersion`, sim HUD 제목줄, 웹 `/simulator` 씬 카드.
 - UE 구현: `Plugins/baroCCTVSimulator/Source/baroCCTVSimulator/{Public,Private}/SceneControlSubsystem.{h,cpp}`
   (포트 조회는 `HucomsServerSubsystem::GetCameraPorts`).

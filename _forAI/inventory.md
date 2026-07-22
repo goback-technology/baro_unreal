@@ -35,7 +35,7 @@
 - `Plugins/baroCCTVSimulator/` — **git submodule**(CCTV 런타임 C++ 단일 소스). 아래 [Submodule 운영](#submodule-운영) 참조.
 - `Plugins/RYUKoreaBuilidngCreator/` — 한국 건물팩(Fab 상용, 콘텐츠 2.6GB + Runtime C++ 모듈, 5.8 재빌드됨). git 미추적.
 - `Content/` — parking_area에서 이관한 30GB 환경. 시뮬 레벨 `simulator/LV_Park_sim_01~03`, 원본 `Levels/LV_Park_01~08`, 대형 에셋팩(BlackAlder/Fab/Cars/Road_Creator_Pro/UltraDynamicSky). git 미추적.
-- `Config/` — 5개 파일: `DefaultEditor.ini`, `DefaultEngine.ini`(RHI·맵·게임모드·`[HTTPServer.Listeners]` + **`r.Lumen.HardwareRayTracing=True`** — 캡처 persist 가드와 짝, memo 「메모리 누수 원인과 대응」), `DefaultGame.ini`(플러그인 서브시스템 설정 + `[GeneralProjectSettings] ProjectVersion` = **앱 버전**, 현 **0.1.1** + AssetManager **GameFeatureData 항목 bIsEditorOnly=True 필수** — memo 「반복 금지」), `DefaultGameUserSettings.ini`(배포 기본 960×540 일반 창모드 `FullscreenMode=2` + Epic 품질·`sg.ResolutionQuality=100`), `DefaultInput.ini`(창모드 고정을 위해 `bAltEnterTogglesFullscreen=False` / `bF11TogglesFullscreen=False`).
+- `Config/` — 5개 파일: `DefaultEditor.ini`, `DefaultEngine.ini`(RHI·맵·게임모드·`[HTTPServer.Listeners]` + **`r.Lumen.HardwareRayTracing=True`** — 캡처 persist 가드와 짝, memo 「메모리 누수 원인과 대응」), `DefaultGame.ini`(플러그인 서브시스템 설정 + `[GeneralProjectSettings] ProjectVersion` = **앱 버전**, 현 **0.2.0**(배포 zip 이름의 출처 — `Scripts/package.ps1 -Zip`) + AssetManager **GameFeatureData 항목 bIsEditorOnly=True 필수** — memo 「반복 금지」), `DefaultGameUserSettings.ini`(배포 기본 960×540 일반 창모드 `FullscreenMode=2` + Epic 품질·`sg.ResolutionQuality=100`), `DefaultInput.ini`(창모드 고정을 위해 `bAltEnterTogglesFullscreen=False` / `bF11TogglesFullscreen=False`).
   - MCP 자동시작은 `Saved/Config/.../EditorPerProjectUserSettings.ini`(git 미추적). ⚠ 쿡 중 :8000 점유 프로세스가 있으면 쿡이 실패한다(memo 「반복 금지」).
 - `Scripts/` — `common.ps1`(.env 로더 + `Get-BaroSetting`/`Assert-BaroFile` 헬퍼), `build.ps1`, `run.ps1`, `package.ps1`.
 - `docs/` — `windows_build_run.md`(팀원 온보딩: 준비물·서브모듈·`.env`·빌드/실행·트러블슈팅), `scene-control-api.md`(`/scene/*` REST 레퍼런스 + 3D→2D 투영), `sangmyung_team_request.md`(상명대 에셋팀 협업 요청서), `outputs/`(생성 PDF, git 미추적).
@@ -76,7 +76,9 @@
   ```powershell
   ./Scripts/package.ps1                  # Development, sim_01만 쿡 → Packaged/Win64 (~3.4GB)
   ./Scripts/package.ps1 -Config Shipping # 배포용 최적화(심볼 제외)
+  ./Scripts/package.ps1 -Zip             # 패키징 + 배포 zip(앱 버전으로 이름 자동 생성)
   ```
+  **`-Zip`**: `Packaged/baro_unreal_sim_v<앱버전>_<yyyyMMdd>.zip` + `.sha256`(`<hash> *<name>` 형식) + `.info.txt`(앱/플러그인 버전·Config·Map·양쪽 커밋 SHA)를 만든다. 이름은 `Config/DefaultGame.ini`의 `ProjectVersion`에서 자동 생성한다 — 손으로 짓지 않는다. zip 직전 아카이브 안의 `baro_unreal/Saved`를 제거하고, 같은 이름이 이미 있으면 실패한다(`-Force`로 덮어쓰기). 구조는 Win64 폴더의 **내용**이 zip 루트에 온다.
   RunUAT BuildCookRun 래퍼. 실행 전 `Packaged/Win64`를 경로 확인 후 비워, 과거 `Saved/GameUserSettings.ini`와 구 바이너리가 배포본에 섞이지 않게 한다.
   UAT 출력은 `Saved/Logs/package-uat.log`에 티잉되고, **Zen oplog 오류일 때만 1회 자동 재시도**한다(zenserver sponsor 경쟁 조건 — `memo.md` 「반복 금지」). 컴파일·쿡 에러는 재시도 없이 즉시 실패한다.
   **`-CrashReporter`** 로 CrashReportClient 를 함께 스테이징한다(BuildCookRun 은 ini 의 IncludeCrashReporter 를 읽지 않음 — 2026-07-20).

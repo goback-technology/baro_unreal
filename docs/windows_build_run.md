@@ -11,6 +11,7 @@
 - [에디터에서 실행](#에디터에서-실행)
 - [CCTV 서버처럼 실행](#cctv-서버처럼-실행)
 - [패키지 만들기](#패키지-만들기)
+- [배포본(zip) 만들기](#배포본zip-만들기)
 - [실행 확인](#실행-확인)
 - [자주 막히는 경우](#자주-막히는-경우)
 
@@ -225,6 +226,27 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 같은 방식으로 `build.ps1`, `run.ps1`도 실행할 수 있다.
+
+## 배포본(zip) 만들기
+
+기기에 전달할 압축본은 `-Zip`으로 만든다. **폴더를 손으로 압축하지 않는다.**
+
+```powershell
+.\Scripts\package.ps1 -Zip                  # Development (로그·심볼 포함)
+.\Scripts\package.ps1 -Config Shipping -Zip # Shipping (최적화·심볼 제외)
+```
+
+`Packaged\`에 세 파일이 생긴다.
+
+- `baro_unreal_sim_v<앱버전>_<yyyyMMdd>.zip`
+- `.sha256` — 전달 후 무결성 확인용
+- `.info.txt` — 앱/플러그인 버전, Config, Map, 양쪽 커밋 SHA
+
+이름의 버전은 `Config\DefaultGame.ini`의 `ProjectVersion`(**앱 버전**)에서 자동으로 만든다.
+이름을 손으로 짓지 않는 것이 이 명령의 목적이다 — 예전 수동 zip은 **플러그인** 버전으로 이름이 붙어
+있어(`v0.1.4` = 플러그인, 당시 앱은 `0.1.0`) 무엇의 버전인지 알 수 없었다.
+
+같은 이름이 이미 있으면 실패한다(이미 전달한 산출물 보호). 덮어쓰려면 `-Force`를 붙인다.
 
 ## 실행 확인
 
