@@ -22,6 +22,17 @@
 
 ### 능동 작업
 
+- [ ] **v0.2.0 48시간 soak 검증 (진행 중, 최우선)** — 2026-07-22 14:26 KST 배포 착수, 예상 종료
+      **2026-07-24(금) 14:26 KST**. 기기에서 `BaroHealth-*.csv` · `baro_unreal.log` · `Saved/Crashes/` 회수 후
+      분석. 합격/불합격 기준과 함정(부팅 워밍업 +40MB/s 는 누수 아님, MJPEG 소비자가 붙어 있어야 유효)은
+      `dev_log.md` 2026-07-22 14:26 엔트리에 미리 못박아 뒀다 — **사후에 기준을 만들지 말 것**.
+- [ ] **soak 합격 후: 배포본을 Shipping 으로 전환.** 지금 Development 인 것은 누수 감시 때문에
+      로그·`BaroHealth-*.csv` 가 필요하고 Shipping 은 `ensure` 가 컴파일 아웃돼 이상을 숨기기 때문이다.
+      감시가 끝나면 `./Scripts/package.ps1 -Config Shipping -Zip`.
+- [ ] **`baroQuantum` 플러그인 핀 갱신 검토** — 현재 `9a52a22`(v0.1.5 = 암부 화질 회귀가 있는 폐기 버전)에
+      묶여 있다. v0.1.6 으로 올리려면 그쪽 `DefaultEngine.ini` 에도 `r.Lumen.HardwareRayTracing=True` 가
+      필요하다(없으면 가드가 persist 를 꺼 v0.1.5 와 같은 화질이 된다 — 누수는 없음). 별건·이교수님 판단.
+
 - [ ] **나머지 RYU 레벨 빌딩 베이크**: `LV_Park_01 / 04 / 07_A`, `Unity/LV_Park_01_U / 04_U`.
       절차는 `memo.md`의 「RYU 플러그인-프리 베이크」 레시피 그대로. (sim_01·sim_03 완료, sim_02는 RYU無.)
 - [ ] **전 레벨 베이크 완료 후에만** uproject에 `{"Name":"RYUKoreaBuilidngCreator","Enabled":false}`를

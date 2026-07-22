@@ -11,6 +11,37 @@
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
 
+- 2026-07-22 14:26 KST: **v0.2.0 배포 착수 — 48시간 soak 대기 상태로 인계.**
+  - **여기까지가 확정된 상태다.** 배포 산출물 `Packaged/baro_unreal_sim_v0.2.0_20260722.zip`(2.78GB,
+    sha256 `68674c4b…f618f9`, 앱 v0.2.0 / 플러그인 v0.1.6 / Development / `LV_Park_sim_01`).
+    이교수님이 현장 기기에 배포해 **48시간 연속 가동**한 뒤(예상 종료 **2026-07-24(금) 14:26 KST**)
+    로그 분석을 맡기신다. 아래는 다음 세션이 그대로 이어받기 위한 인계 메모다.
+  - **이번 릴리스가 고친 것(48h 로 검증하려는 것)**: ① SW Lumen + persistent ViewState 캡처의 CPU 누수
+    (구 v0.1.4 실측 **+1.86~2.07MB/s ≈ 6.7GB/h** → 35시간 가동 후 OOM). ② 부팅마다 터지던 GameFeatureData
+    Ensure(2026-07-17 에 오류보고 처리 중 전 스레드 정지 → **15시간 먹통**). ③ CrashReportClient 미스테이징.
+  - **분석에 필요한 파일**(기기에서 회수):
+    `baro_unreal/Saved/Logs/BaroHealth-*.csv`(1초 샘플·30초 기록, **주 판정 자료**),
+    `baro_unreal/Saved/Logs/baro_unreal.log`, `baro_unreal/Saved/Crashes/`(비어 있어야 정상),
+    가능하면 작업관리자 기준 Private Bytes 도 한 번.
+  - **판정 기준(합격/불합격을 미리 못박아 둔다 — 사후에 기준을 만들지 않기 위해)**:
+    - **합격**: CSV `state` 가 `LEAK_SUSPECTED` 0건. `physical_mb` 가 워밍업(부팅 후 ~100초) 이후
+      **단조 증가하지 않고 진동**하며, 48시간 총 증가가 수백 MB 수준. `Saved/Crashes` 비어 있음.
+      로그에 `Failed to load class /Script/GameFeatures.GameFeatureData` 0건.
+    - **불합격**: `memory_slope_mb_min` 이 지속적으로 양수(특히 20MB/min 이상 = `LEAK_SUSPECTED`).
+      참고로 구 결함은 **111MB/min** 수준이라 재발하면 즉시 눈에 띈다. 48시간이면 320GB 규모라
+      그전에 OOM 이 먼저 난다.
+    - **주의(반복 금지)**: 부팅 직후 구간은 텍스처 스트리머 워밍업으로 **+40MB/s 까지 치솟는다**.
+      이건 누수가 아니다(2026-07-20 오판 사례 — memo 「메모리 누수 원인과 대응」). **첫 100초는 버리고**
+      60초 버킷 여러 개로 단조성을 볼 것. 임계값 조정이 필요하면 `baro.Health.*` cvar
+      (`WatchMBPerMin` 5 / `LeakMBPerMin` 20 / `TrendWindow` 120 / `ResetJumpMB` 256).
+  - **주의: MJPEG 스트림이 붙어 있어야 의미 있는 시험이다.** 시뮬은 클라이언트가 0 이면 캡처를 아예 안 돌려
+    누수 경로가 실행되지 않는다(`HasClients()` 게이트). 48시간 동안 baro_calory 프리뷰를 열어 두거나
+    소비자를 하나 붙여 둘 것. 단, baro_calory 는 같은 날 워치독이 들어가 **탭이 숨겨진 채 60초가 지나면
+    스스로 끊는다** — 브라우저 탭을 방치하는 방식은 시험이 중간에 죽는다. 별도 소비자를 권장한다.
+  - **불합격 시 다음 수**: `-LLM -LLMCSV` 로 기동해 LLM 태그별 성장분을 본다(구 진단에서 `DistanceFields`
+    태그로 SW Lumen 을 특정했다). HWRT 가드가 실제로 걸렸는지는 `baro.Capture.PersistRenderingState`
+    와 `r.Lumen.HardwareRayTracing` 값을 런타임에서 확인.
+
 - 2026-07-22: **배포 zip 이름을 앱 버전 기준으로 통일 + 앱 v0.2.0 (코드 변경 없음, 패키징 규약 릴리스).**
   - **문제(이교수님 지적)**: 기존 배포본 `baro_unreal_sim_v0.1.4_20260714.zip` 의 `0.1.4` 는 **플러그인** 버전이었고
     그때 앱 `ProjectVersion` 은 `0.1.0` 이었다. 이름만으로 무엇의 버전인지 알 수 없어, 배포본을 대표하는
