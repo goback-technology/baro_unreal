@@ -133,11 +133,20 @@ notepad .env
 이미 같은 이름이 있으면 실패한다(배포한 산출물 보호). 덮어쓰려면 `-Force`를 준다.
 이름 확정과 중복 검사는 **쿡 전에** 하므로, 이름이 겹치면 20분짜리 빌드를 돌리기 전에 즉시 멈춘다.
 
-전달받은 쪽에서는 무결성을 이렇게 확인한다(사이드카는 LF 줄끝이라 리눅스에서 그대로 통과한다).
+전달받은 쪽에서는 무결성을 이렇게 확인한다.
+
+```powershell
+# Windows
+(Get-FileHash baro_unreal_sim_v0.2.0_20260722.zip -Algorithm SHA256).Hash.ToLower()
+```
 
 ```bash
+# Git Bash / WSL / 리눅스
 sha256sum -c baro_unreal_sim_v0.2.0_20260722.zip.sha256
 ```
+
+사이드카는 **LF 줄끝**으로 쓴다. CRLF면 GNU `sha256sum`이 CR을 파일명의 일부로 읽어
+`FAILED open or read`가 난다 — 리눅스뿐 아니라 **Windows의 Git Bash·WSL에서도 동일하게 깨진다**.
 
 ### 실행 확인
 

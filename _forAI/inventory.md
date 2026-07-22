@@ -58,7 +58,7 @@
 ## Submodule 운영
 
 - 정의: `.gitmodules` → `Plugins/baroCCTVSimulator` = `https://github.com/gbox3d/baroCCTVSimulator.git`
-- 현재 핀: `00875b8`(heads/main, `.uplugin` VersionName **0.1.6** — persist HWRT 가드). 원격이 `goback-technology/baroCCTVSimulator` 로 이관됨(구 `gbox3d/...` URL 은 리다이렉트로 동작 — `.gitmodules` 갱신은 선택).
+- 현재 핀: `261edfa`(heads/main, `.uplugin` VersionName **0.1.6** — persist HWRT 가드 `00875b8` + `_forAI` 버전표기 정정 docs-only `261edfa`). 원격이 `goback-technology/baroCCTVSimulator` 로 이관됨(구 `gbox3d/...` URL 은 리다이렉트로 동작 — 2026-07-22 push 로 재확인. `.gitmodules` 갱신은 선택이나, 리다이렉트가 끊기면 3개 프로젝트가 동시에 깨지는 잠재 취약점이다).
 - 클론 직후 필수: `git submodule update --init --recursive` (빠뜨리면 플러그인 없이 열려 CCTV 전부 실종)
 - 갱신 흐름: 서브모듈에서 커밋/푸시 → 부모에서 포인터 bump → `chore: baroCCTVSimulator 서브모듈 갱신 → <sha>` 커밋.
 
