@@ -57,8 +57,14 @@
 
 ## Submodule 운영
 
-- 정의: `.gitmodules` → `Plugins/baroCCTVSimulator` = `https://github.com/gbox3d/baroCCTVSimulator.git`
-- 현재 핀: `261edfa`(heads/main, `.uplugin` VersionName **0.1.6** — persist HWRT 가드 `00875b8` + `_forAI` 버전표기 정정 docs-only `261edfa`). 원격이 `goback-technology/baroCCTVSimulator` 로 이관됨(구 `gbox3d/...` URL 은 리다이렉트로 동작 — 2026-07-22 push 로 재확인. `.gitmodules` 갱신은 선택이나, 리다이렉트가 끊기면 3개 프로젝트가 동시에 깨지는 잠재 취약점이다).
+- 정의: `.gitmodules` → `Plugins/baroCCTVSimulator` = `https://github.com/goback-technology/baroCCTVSimulator.git`
+  (2026-07-22 정식 주소로 교체. 그전엔 구 `gbox3d/...` 를 GitHub 이관 리다이렉트에 의존해 쓰고 있었는데,
+  **옛 위치에 새 저장소나 fork 가 생기면 리다이렉트가 영구 삭제된다**는 GitHub 사양이 문제였다.
+  개인 계정으로 fork 만 떠도 같은 이름(`gbox3d/baroCCTVSimulator`)에 안착해 끊기고, 그 뒤 새 클론은
+  **에러 없이 조용히 fork 를 추적**한다. `baroQuantum` 도 같은 날 함께 교체했다.)
+- 현재 핀: `261edfa`(heads/main, `.uplugin` VersionName **0.1.6** — persist HWRT 가드 `00875b8` + `_forAI` 버전표기 정정 docs-only `261edfa`).
+- URL 을 바꿀 때는 **3계층을 모두** 맞춰야 한다 — `.gitmodules`(추적됨) / `.git/config`(로컬) / 서브모듈 자신의 `origin`.
+  `git config -f .gitmodules submodule.<path>.url <새주소>` 뒤 **`git submodule sync --recursive`** 를 돌리면 나머지 둘이 따라온다.
 - 클론 직후 필수: `git submodule update --init --recursive` (빠뜨리면 플러그인 없이 열려 CCTV 전부 실종)
 - 갱신 흐름: 서브모듈에서 커밋/푸시 → 부모에서 포인터 bump → `chore: baroCCTVSimulator 서브모듈 갱신 → <sha>` 커밋.
 

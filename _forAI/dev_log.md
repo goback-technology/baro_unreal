@@ -54,6 +54,16 @@
     같은 저장소의 dev_log(0.1.2~0.1.6 전부 기록)와 내부 모순이었고 `/scene/catalog.pluginVersion` 실제값과도
     어긋났다. → **docs-only 커밋 `261edfa`**(VersionName 범프 없음 — 코드 무변경)로 정정하고 `.uplugin` 이
     단일 출처임을 각 줄에 명시해 재발을 막았다. 부모 핀 `00875b8 → 261edfa`.
+  - **서브모듈 URL 을 정식 주소로 교체(이교수님 승인, 위험요소 제거)**: `baro_unreal`·`baroQuantum` 두
+    소비 프로젝트가 구 `gbox3d/baroCCTVSimulator.git` 를 **GitHub 이관 리다이렉트에 의존**해 쓰고 있었다.
+    리다이렉트는 만료가 없지만, GitHub 사양상 **옛 위치에 새 저장소나 fork 가 생기면 영구 삭제**된다
+    ("If you create a new repository or fork at the previous repository location, the redirects … will be
+    permanently deleted" — 공식 문서 확인). 개인 계정으로 fork 만 떠도 같은 이름에 안착해 끊기고, 그 뒤
+    새 클론의 `submodule update` 는 **에러 없이 조용히 fork 를 추적**한다(실패보다 나쁜 무증상 분기).
+    → 두 프로젝트 모두 `goback-technology/baroCCTVSimulator.git` 로 교체. `.gitmodules`·`.git/config`·
+    서브모듈 `origin` **3계층 전부** 확인했고(`git submodule sync --recursive`), 새 URL 로 `ls-remote` 가
+    같은 커밋(`261edfa`)을 반환하는 것까지 검증했다. 참고: 교체 전 API 조회로 `gbox3d/...` 의 정식 이름이
+    `goback-technology/...` 임을 확인 — 리다이렉트는 그때까지 정상 동작 중이었다(선제 정리).
   - **플랫폼: 당분간 Windows 전용 재확인(이교수님)**. 이유는 **Linux 화질 손상** — Vulkan 오프스크린에서
     VT 피드백이 동작하지 않아 주차면 라인 데칼이 렌더되지 않는다(2026-07-10 실측, `plan.md` Structure
     decisions). 서브모듈 `_forAI` 에도 "검증 플랫폼 = Windows/Win64 전용"과 그 이유를 명시했다 —
