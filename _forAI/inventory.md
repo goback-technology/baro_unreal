@@ -78,7 +78,10 @@
   ./Scripts/package.ps1 -Config Shipping # 배포용 최적화(심볼 제외)
   ./Scripts/package.ps1 -Zip             # 패키징 + 배포 zip(앱 버전으로 이름 자동 생성)
   ```
-  **`-Zip`**: `Packaged/baro_unreal_sim_v<앱버전>_<yyyyMMdd>.zip` + `.sha256`(`<hash> *<name>` 형식) + `.info.txt`(앱/플러그인 버전·Config·Map·양쪽 커밋 SHA)를 만든다. 이름은 `Config/DefaultGame.ini`의 `ProjectVersion`에서 자동 생성한다 — 손으로 짓지 않는다. zip 직전 아카이브 안의 `baro_unreal/Saved`를 제거하고, 같은 이름이 이미 있으면 실패한다(`-Force`로 덮어쓰기). 구조는 Win64 폴더의 **내용**이 zip 루트에 온다.
+  **`-Zip`**: `Packaged/baro_unreal_sim_v<앱버전>_<yyyyMMdd>.zip` + `.sha256` + `.info.txt`(앱/플러그인 버전·Config·Map·양쪽 커밋 SHA, 워킹트리가 더러우면 `-dirty`)를 만든다. 이름은 `Config/DefaultGame.ini`의 `ProjectVersion`에서 자동 생성한다 — 손으로 짓지 않는다. zip 직전 아카이브 안의 `baro_unreal/Saved`를 제거하고, 구조는 Win64 폴더의 **내용**이 zip 루트에 온다.
+  - **이름 확정·중복 검사는 쿡 전에** 한다. 압축 직전에 두면 실패가 확정된 실행이 20분짜리 쿡을 다 돌린 뒤 throw 하고, 그 사이 `Packaged/Win64` 정리 단계가 직전 정상 아카이브까지 날린다. 같은 이름이 있으면 즉시 실패하며 `-Force`로만 덮어쓴다.
+  - **`.sha256`은 반드시 LF 줄끝**(`<hash> *<name>\n`). `Set-Content`는 CRLF로 써서 GNU `sha256sum -c`가 CR을 파일명 일부로 읽어 `FAILED open or read`가 난다(2026-07-22 실측 — 배포본을 리눅스/DGX에서 검증하므로 치명적). `[IO.File]::WriteAllText`로 직접 쓴다.
+  - **압축은 `.partial`로 만든 뒤 성공 시에만 rename**. 3GB 압축 중 예외가 나면 .NET은 만들다 만 zip을 지우지 않는데, 그게 최종 이름으로 남으면 다음 실행의 중복 가드가 "이미 배포한 산출물"로 오인해 막는다.
   RunUAT BuildCookRun 래퍼. 실행 전 `Packaged/Win64`를 경로 확인 후 비워, 과거 `Saved/GameUserSettings.ini`와 구 바이너리가 배포본에 섞이지 않게 한다.
   UAT 출력은 `Saved/Logs/package-uat.log`에 티잉되고, **Zen oplog 오류일 때만 1회 자동 재시도**한다(zenserver sponsor 경쟁 조건 — `memo.md` 「반복 금지」). 컴파일·쿡 에러는 재시도 없이 즉시 실패한다.
   **`-CrashReporter`** 로 CrashReportClient 를 함께 스테이징한다(BuildCookRun 은 ini 의 IncludeCrashReporter 를 읽지 않음 — 2026-07-20).

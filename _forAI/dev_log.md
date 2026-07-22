@@ -36,6 +36,19 @@
     `_forAI` README/inventory/memo 의 앱 버전 스냅샷 `0.2.0` + zip 규약, `docs/scene-control-api.md` 기준
     플러그인 버전 `0.1.1→0.1.6` 및 **`cars[]` 필드 누락 보강**(v0.1.2부터 `BP_Car.Mesh_List` 리플렉션으로
     동적 — 실측 캡처로 확인, `carType` 범위를 `0..carCount-1` 로 정정).
+  - **적대적 감사가 잡은 스크립트 결함 3건(전부 수정·재검증)**:
+    ① **`.sha256` 이 CRLF 로 기록돼 리눅스 검증이 깨졌다(high, 실물 재현).** `Set-Content -Encoding ascii` 가
+    후행 개행을 CRLF 로 쓰는데 GNU `sha256sum -c` 는 CR 을 파일명의 일부로 읽는다 →
+    `'...zip'$'\r': No such file or directory / FAILED open or read`. 구 v0.1.4 사이드카는 102B(LF), 내가 만든
+    v0.2.0 은 103B(CRLF)였다. **배포본을 리눅스/DGX 에서 검증하므로 무결성 확인이 통째로 무력화된다.**
+    `[IO.File]::WriteAllText(..., "$hash *$zipName\n", UTF8(no BOM))` 로 교체하고 이미 만든 사이드카도 LF 로
+    재작성 — 두 사이드카 모두 `sha256sum -c` **OK**, 102B 로 규격 일치 확인.
+    ② **압축 중 예외 시 반쪽 zip 이 최종 이름으로 남는다(medium).** .NET 은 만들다 만 zip 을 지우지 않아,
+    다음 실행의 중복 가드가 그 시체를 "이미 배포한 산출물"로 오인해 막는다(사이드카는 압축 뒤에 생기므로
+    무효 표시도 없다). `.partial` 로 만든 뒤 성공 시에만 rename → "최종 이름 = 완성본" 불변식.
+    ③ **중복 가드가 20분짜리 쿡 뒤에 실행됐다(medium).** 그 전에 `Packaged/Win64` 정리 단계가 직전 정상
+    아카이브를 이미 파괴하므로, 실패가 확정된 실행이 빌드 시간과 아카이브를 둘 다 날렸다. 이름 확정·중복
+    검사를 **쿡 전으로** 이동하고 시작 배너에 `Zip : <이름> (앱 v.. / 플러그인 v..)` 을 찍게 했다.
   - **미처리(별건)**: 서브모듈 `Plugins/baroCCTVSimulator/_forAI` 의 memo/inventory 가 아직 플러그인 `0.1.1`
     이라고 적고 있다(실제 `0.1.6`). 3프로젝트 공유 저장소라 고치면 서브모듈 커밋 → 부모 핀 범프 사슬이
     생기므로 이번 릴리스에 묶지 않았다. **이교수님 승인 후 docs-only 커밋으로 별도 처리**할 것.

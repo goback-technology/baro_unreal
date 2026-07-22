@@ -72,6 +72,37 @@ Assert-BaroFile -Path $Project -Message "uproject 없음. PROJECT_FILE 또는 �
 # ---- 심볼: Shipping 은 pdb 제외해 슬림, Development 는 크래시 콜스택용으로 유지 ----
 $noDebug = ($Config -eq "Shipping")
 
+# ---- 배포 zip 이름 확정 + 중복 검사 (쿡 '전에' 한다) ----
+# 이 검사가 압축 직전에 있으면, 실패가 확정된 실행이 20분짜리 쿡·빌드를 전부 돌린 뒤에야
+# throw 하고 그 사이 아래 Remove-Item 이 직전 정상 아카이브까지 이미 날려버린다.
+# 파일 존재 여부는 시작 시점에 알 수 있으므로 여기서 끝낸다.
+$zipPath = $null
+$appVersion = $null
+$pluginVersion = $null
+if ($Zip) {
+    # 버전은 항상 소스에서 읽는다 — 손으로 이름을 짓지 않는 것이 이 단계의 목적이다.
+    $gameIni = Join-Path $Root "Config\DefaultGame.ini"
+    Assert-BaroFile -Path $gameIni -Message "DefaultGame.ini 없음 — 앱 버전을 읽을 수 없습니다"
+    $appVersion = (Select-String -LiteralPath $gameIni -Pattern '^\s*ProjectVersion\s*=\s*(.+?)\s*$' |
+        Select-Object -First 1).Matches.Groups[1].Value
+    if ([string]::IsNullOrWhiteSpace($appVersion)) {
+        throw "DefaultGame.ini 에서 ProjectVersion 을 찾지 못했습니다 (zip 이름을 만들 수 없음)"
+    }
+
+    # 플러그인 버전은 이름에 넣지 않고 .info.txt 에 기록한다(이름은 앱 버전 하나로 단순하게).
+    $upluginPath = Join-Path $Root "Plugins\baroCCTVSimulator\baroCCTVSimulator.uplugin"
+    $pluginVersion = if (Test-Path -LiteralPath $upluginPath) {
+        (Get-Content -LiteralPath $upluginPath -Raw | ConvertFrom-Json).VersionName
+    } else { "(unknown)" }
+
+    $zipPath = Join-Path $PackagedRoot ("baro_unreal_sim_v{0}_{1}.zip" -f $appVersion, (Get-Date -Format "yyyyMMdd"))
+    foreach ($p in @($zipPath, "$zipPath.sha256", "$zipPath.info.txt")) {
+        if ((Test-Path -LiteralPath $p) -and -not $Force) {
+            throw "이미 존재합니다: $p`n이미 배포한 산출물일 수 있습니다. 덮어쓰려면 -Force 를 주세요."
+        }
+    }
+}
+
 Write-Host "==================== baro_unreal 패키징 ====================" -ForegroundColor Cyan
 Write-Host (" UE_PATH  : {0}" -f $Engine)
 Write-Host (" Project  : {0}" -f $Project)
@@ -80,6 +111,9 @@ Write-Host (" Config   : {0}" -f $Config)
 Write-Host (" Map      : {0}" -f $Map)
 Write-Host (" Archive  : {0}" -f $Archive)
 Write-Host (" DebugSym : {0}" -f ($(if ($noDebug) { "제외" } else { "포함" })))
+if ($Zip) {
+    Write-Host (" Zip      : {0}  (앱 v{1} / 플러그인 v{2})" -f (Split-Path $zipPath -Leaf), $appVersion, $pluginVersion)
+}
 Write-Host " * 에디터가 열려 있으면 지금 닫으세요 (파일락/DDC 충돌)" -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor Cyan
 
@@ -144,31 +178,9 @@ Write-Host "==================== 완료 ====================" -ForegroundColor G
 Write-Host (" 산출물: {0}" -f $Archive) -ForegroundColor Green
 
 # ---- 배포 zip (선택) ----
+# 이름 확정·중복 검사는 위(쿡 전)에서 이미 끝났다. 여기서는 압축만 한다.
 if ($Zip) {
-    # 버전은 항상 소스에서 읽는다 — 손으로 이름을 짓지 않는 것이 이 단계의 목적이다.
-    $gameIni = Join-Path $Root "Config\DefaultGame.ini"
-    Assert-BaroFile -Path $gameIni -Message "DefaultGame.ini 없음 — 앱 버전을 읽을 수 없습니다"
-    $appVersion = (Select-String -LiteralPath $gameIni -Pattern '^\s*ProjectVersion\s*=\s*(.+?)\s*$' |
-        Select-Object -First 1).Matches.Groups[1].Value
-    if ([string]::IsNullOrWhiteSpace($appVersion)) {
-        throw "DefaultGame.ini 에서 ProjectVersion 을 찾지 못했습니다 (zip 이름을 만들 수 없음)"
-    }
-
-    # 플러그인 버전은 이름에 넣지 않고 .info.txt 에 기록한다(이름은 앱 버전 하나로 단순하게).
-    $upluginPath = Join-Path $Root "Plugins\baroCCTVSimulator\baroCCTVSimulator.uplugin"
-    $pluginVersion = if (Test-Path -LiteralPath $upluginPath) {
-        (Get-Content -LiteralPath $upluginPath -Raw | ConvertFrom-Json).VersionName
-    } else { "(unknown)" }
-
-    $stamp   = Get-Date -Format "yyyyMMdd"
-    $zipName = "baro_unreal_sim_v{0}_{1}.zip" -f $appVersion, $stamp
-    $zipPath = Join-Path $PackagedRoot $zipName
-
-    foreach ($p in @($zipPath, "$zipPath.sha256", "$zipPath.info.txt")) {
-        if ((Test-Path -LiteralPath $p) -and -not $Force) {
-            throw "이미 존재합니다: $p`n이미 배포한 산출물일 수 있습니다. 덮어쓰려면 -Force 를 주세요."
-        }
-    }
+    $zipName = Split-Path $zipPath -Leaf
 
     # 실행 흔적(로그·크래시·GameUserSettings)이 배포본에 섞이면 안 된다.
     # 패키징 직후엔 없지만, 검증 실행을 한 뒤 zip 을 만드는 흐름이 흔해 방어적으로 지운다.
@@ -186,12 +198,30 @@ if ($Zip) {
     }
     # includeBaseDirectory=$false → Win64 폴더 자체가 아니라 그 '내용'이 zip 루트에 온다
     # (baro_unreal/, Engine/, baro_unreal.exe … — 기존 배포 zip 과 동일 구조).
-    [System.IO.Compression.ZipFile]::CreateFromDirectory(
-        $Archive, $zipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+    #
+    # .partial 로 만든 뒤 성공했을 때만 최종 이름으로 옮긴다. 3GB 압축 도중 예외(디스크 부족,
+    # 소스 파일 락, Ctrl-C)가 나면 .NET 은 만들다 만 zip 을 지우지 않는데, 그게 최종 이름으로
+    # 남으면 다음 실행의 중복 가드가 그 시체를 "이미 배포한 산출물"로 오인해 막는다.
+    # 이 방식이면 "최종 이름 = 완성본"이 불변식이 된다.
+    $tmpZip = "$zipPath.partial"
+    if (Test-Path -LiteralPath $tmpZip) { Remove-Item -LiteralPath $tmpZip -Force }
+    try {
+        [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            $Archive, $tmpZip, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+    }
+    catch {
+        if (Test-Path -LiteralPath $tmpZip) { Remove-Item -LiteralPath $tmpZip -Force }
+        throw
+    }
+    Move-Item -LiteralPath $tmpZip -Destination $zipPath -Force
 
     $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLower()
-    # sha256sum 바이너리 모드 형식 — 기존 사이드카와 동일하게 유지(검증 도구 호환).
-    "$hash *$zipName" | Set-Content -LiteralPath "$zipPath.sha256" -Encoding ascii
+    # sha256sum 바이너리 모드 형식 + **LF 단일 개행**.
+    # Set-Content 는 CRLF 로 쓰는데, GNU sha256sum 은 CR 을 파일명의 일부로 읽어
+    # "No such file or directory / FAILED open or read" 로 검증이 통째로 깨진다(실측).
+    # 배포본을 리눅스(DGX 등)에서 검증하므로 줄끝은 반드시 LF 여야 한다.
+    [IO.File]::WriteAllText("$zipPath.sha256", "$hash *$zipName`n",
+        (New-Object Text.UTF8Encoding $false))   # 내용이 전부 ASCII 라 BOM 없는 UTF8 = ASCII
 
     # 무엇이 들어있는 zip 인지 남긴다. 이름만으론 플러그인/커밋을 알 수 없어 과거에 혼동이 있었다.
     # 커밋되지 않은 변경이 섞인 빌드는 SHA 만으론 재현이 안 되므로 -dirty 로 표시한다.
