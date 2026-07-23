@@ -6,7 +6,7 @@ UE 시뮬레이터의 씬(주차면·차량·카메라 파라미터)을 **실행
 프록시한다(`stream`·`control`·`status`·`probe`·`devices` 등 나머지 `/api/simulator/*`는 baro_calory
 자체 기능이며 이 문서의 범위 밖이다). 웹UI·CLI·(향후) MCP가 전부 이 하나의 제어면을 공유한다.
 
-> 문서 기준: 플러그인 v0.1.7 (2026-07-23). JSON은 현재 계약의 필드 구조 예시이며,
+> 문서 기준: 플러그인 v0.1.8 (2026-07-23). JSON은 현재 계약의 필드 구조 예시이며,
 > 숫자는 별도 실측 표기가 없는 한 설명용 값이다.
 
 ## 목차
@@ -88,6 +88,21 @@ ParkingSlotClassPrefix=BP_ParkingSlot
 
 - 주석은 반드시 별도 줄(`;` 시작)에 쓴다 — 값 뒤 인라인 주석은 UE ini 규약이 아니다(값으로 읽힘).
 
+**런타임 카메라 추가(config 스포너, v0.1.8부터)** — 레벨을 열지 않고 카메라를 배치한다. `HucomsServerSubsystem`
+섹션에 `+SpawnCameras=(...)` 를 추가하면 월드 BeginPlay 에서 스폰되어 `/scene/cameras`·Hucoms CGI·MJPEG 에
+자동 노출된다(BEVHeight 파인튜닝용 높이별 카메라 배치에 사용):
+
+```ini
+[/Script/baroCCTVSimulator.HucomsServerSubsystem]
+; Location=광학중심 월드 cm(높이=Z), YawDeg=설치 방위, PitchDeg=설치 하향각(BuildChannels 가 tilt 로 이관),
+; HttpPort/MjpegPort=명시 필수(자동포트는 액터 열거순이라 비결정적, 8095 씬 제어 포트와 겹치지 말 것).
++SpawnCameras=(Location=(X=73,Y=-2015,Z=1600.0),YawDeg=90.0,PitchDeg=-36.1,HttpPort=8085,MjpegPort=8195,Note="16m")
+```
+
+- 스폰 카메라는 렌더 대상이 아니라 캡처 소스라 폴(메시) 없이 공중에 떠도 된다.
+- LAN 원격 제어가 필요하면 HTTP 포트를 `DefaultEngine.ini [HTTPServer.Listeners]` 오버라이드에 추가한다
+  (MJPEG 는 자체 0.0.0.0 이라 불필요).
+
 ## 엔드포인트 레퍼런스
 
 공통: 요청/응답 본문은 `application/json`(UTF-8). 빈 본문 POST는 `{}`로 취급. 실패 시 `{"error":"메시지"}`.
@@ -106,6 +121,7 @@ ParkingSlotClassPrefix=BP_ParkingSlot
       "index": 0,
       "name": "BMW 1시리즈",
       "asset": "BMW_1시리즈",
+      "class": "car",
       "boundsCm": {
         "coordinateSpace": "actorLocal",
         "center": { "x": 0.24, "y": 0.0, "z": 73.54 },
@@ -129,6 +145,9 @@ ParkingSlotClassPrefix=BP_ParkingSlot
   재귀 집계한 actor-local AABB다. 휠·번호판 메시를 포함하고 가변 번호판 `TextRender`는 제외한다.
   `center`와 `size`의 단위는 cm이며, 월드 박스는 차량의 `transform`으로 변환한다.
   에셋 축 검증 없이 `x/y/z`를 곧바로 제조사식 L/W/H로 이름 바꾸지 말 것. 계산 실패 시 `boundsCm`은 `null`.
+- `class`(**v0.1.8부터**)는 검출 클래스 라벨(`car`/`truck`/`van`)이다. `Mesh_List`에 클래스 메타가 없어
+  에셋명 기반 휴리스틱으로 파생한다(봉고·탑차·포터=truck, 스타렉스·카니발=van, 그 외=car).
+  **현재 23종에 버스는 없다**(최대 승합=스타렉스=van). UE `CarAssetToClass`와 JS `carAssetToClass`가 동일 소스.
 
 ### GET /scene/slots
 
@@ -179,6 +198,9 @@ ParkingSlotClassPrefix=BP_ParkingSlot
         "baseYaw": 0.0
       },
       "wideHFovDeg": 57.14,
+      "projection": "pinhole",
+      "distortion": null,
+      "rollDeg": 0.0,
       "groundReference": {
         "zCm": 10.0,
         "method": "parkingSlotPlacementOriginMedian",
@@ -219,6 +241,9 @@ ParkingSlotClassPrefix=BP_ParkingSlot
 - `mount.location` = 광학중심 월드 위치(cm). PTZ 피벗들이 루트와 동일 위치(레버암 0)라 pan/tilt에 불변.
 - `mount.baseYaw` = 설치 방위(pan=0일 때의 월드 yaw). 광학 yaw = `baseYaw + pan`.
 - `wideHFovDeg` = 1x(zoompos 0) 수평 FOV. zoom→FOV 곡선의 스케일 기준.
+- `projection`/`distortion`/`rollDeg`(**v0.1.8부터**) = 시뮬 광학은 이상적 **핀홀(rectilinear)** 이라
+  왜곡 `null`, roll `0`(설계상 팬/틸트 피벗이 롤을 만들지 않음), principal point = 프레임 중앙이다.
+  focal(px)은 소비자가 `0.5 * width / tan(hfov/2)`로 정확히 계산한다(내부 파라미터 fit 불필요).
 - `groundReference` = 슬롯 액터 **배치 원점 Z**들의 중앙값으로 만든 장면 기준면. 물리 지면
   라인트레이스 결과가 아니다. `sampleCount`는 사용한 슬롯 수이고 `maxDeviationCm`은 중앙값에서
   가장 먼 슬롯 원점의 편차다. 슬롯이 없으면 `null`.
@@ -270,6 +295,12 @@ GET = 현재 배치된 차량 목록:
               "carType": 3, "color": 4,
               "plate": { "type": 0, "city": "서울", "prefix": "123", "kor": "가", "number": "4567" } } ] }
 ```
+
+- **가시성 GT(선택, v0.1.8부터)**: `GET /scene/cars?visibility=<cameraId|hucomsPort>` 이면 각 차량에
+  `visibleRatio`(0=완전가림 … 1=완전노출)를 실고 응답 최상위에 `visibilityCamera`를 에코한다. 지정
+  카메라 광학중심에서 각 차량 AABB 표본점 15개(중심+8코너+6면중심)로 `ECC_Visibility` 라인트레이스한
+  근사값이다(대상 차량 자신은 무시 = 타 물체에 의한 가림만 측정). 파라미터가 없으면 기존 응답 그대로.
+  없는 카메라면 `404`. 프레임 안/밖 판정은 `/scene/project`로 별도로 한다.
 
 POST = 스폰. `slotId`(슬롯 배치, 트랜스폼은 슬롯 것) 또는 `transform`(자유 좌표) 중 하나 필수:
 
@@ -454,8 +485,12 @@ pnpm sim:catalog && pnpm sim:slots && pnpm sim:cars     # CLI 하네스
 
 ## 버전·소스 위치
 
-- 버전 규칙: 플러그인 `.uplugin` `VersionName` = **0.1.0 시작, 수정 시 끝자리 +1**. 현재 문서 기준은 **0.1.7**.
+- 버전 규칙: 플러그인 `.uplugin` `VersionName` = **0.1.0 시작, 수정 시 끝자리 +1**. 현재 문서 기준은 **0.1.8**.
   런타임 확인 = `/scene/catalog.pluginVersion`, sim HUD 제목줄, 웹 `/simulator` 씬 카드.
+- **v0.1.8 추가**: 차종 `class` 라벨, 카메라 `projection`/`distortion`/`rollDeg`(핀홀 명시),
+  `/scene/cars?visibility=` 가시성 GT, config 카메라 스포너(`+SpawnCameras`), Hucoms **연속 PTZ 미러**
+  (`pt_control.cgi?action=setptmove`, `zf_control.cgi?action=setzfmove` — 방향+속도 velocity 제어,
+  `stop`/goptzfpos 로 정지. 벤더 스펙 §8.2/8.3 준수, 성공 시 빈 본문).
 - UE 구현: `Plugins/baroCCTVSimulator/Source/baroCCTVSimulator/{Public,Private}/SceneControlSubsystem.{h,cpp}`
   (포트 조회는 `HucomsServerSubsystem::GetCameraPorts`).
 - JS 계약(진실의 출처): `baro_calory/packages/cctv-client/src/scene-control-client.mjs`

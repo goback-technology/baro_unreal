@@ -11,6 +11,27 @@
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
 
+- 2026-07-23 17:14 KST: **v0.2.0 26시간 중간 soak — 이교수님 "합격" 판정. 누수 종결 확인.**
+  - 배포 기기(다른 PC, `C:\Users\lsj-goback\Desktop\baro_unreal_sim_v0.2.0_20260722`)에서 07-22 14:55
+    가동 개시, **26.3시간 시점**의 `BaroHealth-20260722-145513.csv`(3096 샘플, 391KB) 조기 회수·분석.
+    48시간 완주 전이지만 정착 이후 완전 평평 구간을 하루치 확보해 결론이 났다.
+  - **physical_mb 궤적이 누수가 아니라 점근선(plateau)**: 0~8h +58.6 MB/h(캐시·풀 워밍업) → 8~16h
+    +2.5 MB/h → 16~26h **+0.6 MB/h** → 23~26h **0.0 MB/h(0.001 MB/min)**. 9h에 ~4660 MB 도달 후
+    17시간 동안 4660→4684(+24 MB)로 사실상 정지. 구 결함 **111 MB/min**(35h 만에 OOM) 대비 정상 상태
+    **0.0 MB/min** — 목표했던 결과가 실기 하루 가동으로 확인됐다. virtual/vram 도 4h 내 정착 후 밴드 진동
+    (vram 6846~7034 MB, budget 11347 의 62% 로 천장 여유 있음).
+  - **시험 유효성 통과(가장 중요)**: 1코어 CPU ≥40% 샘플 **2998/3096**, <5% 유휴 **0/3096** — MJPEG
+    소비자가 26시간 내내 붙어 있어 **누수 경로가 실제로 계속 돌아간 상태**의 평평함이다. "소비자 미부착
+    거짓 합격"(dev_log 2026-07-22 함정 #2)이 아님이 데이터로 증명됐다.
+  - **`LEAK_SUSPECTED` 13건 — 미리 못박은 "0건" 기준 미달을 사후 재해석 없이 정직하게 검토**: 10건이
+    첫 8h 정착 버스트(특히 3.6h 에 physical 4373→4582 급등 후 **4.8h 에 4409 로 완전 회수** — 순간부하
+    후 할당자 반납, 누수의 반대 증거), 3건이 25.7h 에 physical 이 오히려 4674→4656 로 **내려간** 구간의
+    2분-창 slope 노이즈. 지속 상승은 **0건**. → 헬스 모니터의 20 MB/min 임계가 순간 스파이크에 예민한
+    것이지 누수가 아니다(모니터 튜닝 관찰, 별건 후보).
+  - **미완(48h 완주 시 최종 확인)**: `baro_unreal.log`(가동 중 잠금 — 시뮬 생존 방증)·`Saved/Crashes/`
+    는 아직 못 봤다. 종료 시 회수해 GameFeatureData Ensure 0건·Crashes 공란을 최종 확정한다.
+    이 시점 결론은 **누수·OOM 위험 없음**이고, 다음 관문은 **Shipping 전환**(plan 참조).
+
 - 2026-07-23: **scene-control-api.md 정합성 감사(215건 대조) + 정정 12곳 반영. _forAI 보강. (v0.1.7 문서 후속)**
   - 배경: 응용 SW팀 피드백(차종 치수·카메라 높이·화각 노출 요청) 접수 → README에 「프로젝트 문서(docs/)」
     「외부 소비자와 협업 컨텍스트」 신설, plan 에 확장 항목 등재. **v0.1.7 확장 구현 자체는 이교수님이
@@ -39,6 +60,37 @@
     않고 점유 매핑만 새 차량으로 교체한다 — 옛 차량이 같은 슬롯에 겹친 채 잔존하고, 이후 옛 차량을 DELETE
     하면 슬롯 점유 해제가 새 차량 점유까지 지울 수 있다(감사 반박 과정에서 코드로 확인). → **같은 날 후속
     수정(아래).**
+
+- 2026-07-23 (BEVHeight 확장): **플러그인 v0.1.8 — 응용 SW팀 파인튜닝 요구서 대응(카메라 스포너·class·가시성 GT·핀홀·연속 PTZ).**
+  - **배경**: 응용 SW팀 요구서(`_localfiles/sim_camera_request.md`) — 실장비 cam-real-002(16m/23°/36-49m)와
+    현 시뮬 카메라(5.75m/57°/5-30m)의 거리 분포가 안 겹쳐 BEVHeight 파인튜닝이 실장비로 전이 안 됨. 1순위 3건
+    + 인터페이스 버그를 v0.1.8 로 구현. 2순위(환경 랜덤화·씬 확장)는 레벨/에셋 트랙이라 이번 범위 제외(이교수님 결정).
+  - **① config 카메라 스포너**(`HucomsServerSubsystem`): `UPROPERTY(config) TArray<FPTZCameraSpawnSpec>
+    SpawnCameras` + `DefaultGame.ini +SpawnCameras=(...)`. BuildChannels 최상단에서 GetAllActorsOfClass 전에
+    스폰(자동스폰 선례와 동일 경로 → 같은 패스에서 채널·포트). **포트 인덱스 버그 예방 수정**: AutoIndex 를
+    자동포트 카메라에서만 증가시켜, 명시 포트 스폰 카메라가 섞여도 레벨 폴 카메라의 8081/8082 가 안 밀리게 함.
+  - **② 차종 class 라벨**: `/scene/catalog.cars[].class`(car/truck/van, 이름 휴리스틱 — 봉고·탑차·포터=truck,
+    스타렉스·카니발=van). **23종에 버스 없음**. UE `CarAssetToClass` = JS `carAssetToClass` 동일 소스.
+  - **③ 가시성/가림 GT**: `GET /scene/cars?visibility=<cameraId|hucomsPort>` → 각 차량 `visibleRatio`(0..1) +
+    `visibilityCamera` 에코. 광학중심→차량 AABB 표본점 15개 `ECC_Visibility` 라인트레이스(자기 무시). 파라미터
+    없으면 기존 응답(하위호환), 없는 카메라 404. Fake 는 항상 1(가림 개념 없음).
+  - **④ 연속 PTZ 미러**(404 버그 수정): `pt_control.cgi?action=setptmove`, `zf_control.cgi?action=setzfmove`
+    velocity 제어(방향+속도, stop/goptzfpos 로 정지). 채널 PanVel/TiltVel/ZoomVel, Tick 적분, 한계 자동정지,
+    bFixed 무시. 벤더 스펙 §8.2/8.3 준수. baro_calory 는 이 CGI 를 안 쓰지만(전부 goptz) 팀 워커가 직접 호출 —
+    fake-camera-client 에도 미러(부호 회귀 방지 테스트).
+  - **⑤ 핀홀 명시 필드**: `/scene/cameras[].{projection:"pinhole", distortion:null, rollDeg:0}` — 소비자가
+    `focal_px = 0.5*W/tan(hfov/2)` 로 계산(소실점 fit 불필요).
+  - **검증**: 에디터 증분 빌드 성공 → standalone `-game -RenderOffscreen` 라이브. 카메라 **6대**(기존 2 + 신규 4),
+    포트 8081~8086/8193~8196 리슨(폴 카메라 8081/8082 유지), 높이 790/1190/1590/1990cm, 연속 PTZ pan/zoom 증감·
+    stop·goto 취소, 가시성 GT 0..1, class 라벨, `/scene/project` 신규 카메라 지원, pluginVersion 0.1.8 확인.
+    **신규 4대 렌더 육안 확인**(스냅샷: 주차행·차량·라인 선명). baro_calory 207/207 통과.
+  - **⚠ 미해결(이교수님 판단)**: LV_Park_sim_01 은 **좁은 폐쇄형 주차장(~21×27m)** 이라 실장비 16m/20°/44m 를
+    **클리어 사이트라인으로는 재현 불가** — 남쪽 44m 배치는 단지 정원(잔디·담장)·아파트동 뒤라 주차장이 통째
+    가려짐(첫 배치 실측: visibleRatio 0, 렌더가 잔디/건물). **해법으로 남쪽 22m 에 높이만 8/12/16/20m 쌓고
+    각자 주차중심 조준**(PitchDeg 개별 -20/-28.6/-36.1/-42.3)해 4대 전부 클리어뷰 확보(슬롯 슬랜트 12~42m,
+    실장비 36~49m 와 far row 에서 겹침). 실장비 원거리 저각이 필수면 더 개방된 레벨 필요 — **ini 만 고치면 되고
+    리빌드 불요**(config). 커밋·push·배포 미수행(soak 진행 중).
+  - **버전**: `.uplugin` 0.1.7→0.1.8. baro_calory: root/backend-core 0.5.7, cctv-client 0.1.9, app-versions.simulator 0.4.6.
 
 - 2026-07-23 (후속): **force 스폰 슬롯 겹침 버그 수정 — 슬롯당 항상 1대 보장(이교수님 지시 "파괴하거나 못하게").**
   - **버그**: 점유 슬롯에 `force:true` 스폰(또는 PATCH 이동) 시 `SpawnCarActor`(`AlwaysSpawn`)가 옛 차 위에

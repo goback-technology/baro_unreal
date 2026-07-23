@@ -23,13 +23,12 @@
 
 ### 능동 작업
 
-- [ ] **v0.2.0 48시간 soak 검증 (진행 중, 최우선)** — 2026-07-22 14:26 KST 배포 착수, 예상 종료
-      **2026-07-24(금) 14:26 KST**. 기기에서 `BaroHealth-*.csv` · `baro_unreal.log` · `Saved/Crashes/` 회수 후
-      분석. 합격/불합격 기준과 함정(부팅 워밍업 +40MB/s 는 누수 아님, MJPEG 소비자가 붙어 있어야 유효)은
-      `dev_log.md` 2026-07-22 14:26 엔트리에 미리 못박아 뒀다 — **사후에 기준을 만들지 말 것**.
-- [ ] **soak 합격 후: 배포본을 Shipping 으로 전환.** 지금 Development 인 것은 누수 감시 때문에
-      로그·`BaroHealth-*.csv` 가 필요하고 Shipping 은 `ensure` 가 컴파일 아웃돼 이상을 숨기기 때문이다.
-      감시가 끝나면 `./Scripts/package.ps1 -Config Shipping -Zip`.
+- [x] ~~**v0.2.0 48시간 soak 검증**~~ — **26h 중간 판정 합격**(2026-07-23 17:14 KST, 이교수님 선언).
+      정상 상태 physical 기울기 0.0 MB/min, 캡처 26h 연속 가동 확인. 상세는 `dev_log.md` 2026-07-23 17:14
+      엔트리. **잔여**: 48h 완주 시 `baro_unreal.log`·`Saved/Crashes/` 회수해 GameFeatureData·Crashes 최종 확정.
+- [ ] **배포본을 Shipping 으로 전환 (이제 착수 가능, 다음 관문).** soak 가 누수 없음을 확인했으므로 로그·
+      `BaroHealth-*.csv` 감시 목적의 Development 는 소임을 다했다. Shipping 은 `ensure` 가 컴파일 아웃돼
+      이상을 숨기니, 48h 완주로 Crashes 공란까지 확정한 **뒤** `./Scripts/package.ps1 -Config Shipping -Zip`.
 - [ ] **`baroQuantum` 플러그인 핀 갱신 검토** — 현재 `9a52a22`(v0.1.5 = 암부 화질 회귀가 있는 폐기 버전)에
       묶여 있다. v0.1.6 으로 올리려면 그쪽 `DefaultEngine.ini` 에도 `r.Lumen.HardwareRayTracing=True` 가
       필요하다(없으면 가드가 persist 를 꺼 v0.1.5 와 같은 화질이 된다 — 누수는 없음). 별건·이교수님 판단.
@@ -38,6 +37,17 @@
       차종별 실제 치수, 카메라 기준면 높이, zoom→HFOV 화각표를 기존 응답에 하위 호환 필드로 추가한다.
       상세 계약·결정 항목·검증 결과는 아래 [전용 계획](#scene-api-확장-계획-v017-구현-완료)을 따른다.
       2026-07-23 에디터 빌드, UE 자동화 4개, JS 테스트 200개와 standalone 실응답 검증을 통과했다.
+- [x] **BEVHeight 파인튜닝 확장 — 플러그인 v0.1.8 구현·검증 완료(2026-07-23, 응용 SW팀 요구서 `_localfiles/sim_camera_request.md`)**:
+      ① config 카메라 스포너(레벨 무수정, 높이별 8/12/16/20m — `+SpawnCameras` in DefaultGame.ini),
+      ② 차종 `class` 라벨(car/truck/van, 버스 없음), ③ 가시성/가림 GT(`/scene/cars?visibility=<cam>` →
+      visibleRatio 0..1, 라인트레이스), ④ 연속 PTZ 미러(pt_control/zf_control velocity), ⑤ 핀홀 명시 필드
+      (projection/distortion/rollDeg). 에디터 빌드 + 라이브 검증(6대·포트·높이·연속PTZ·가시성·렌더 육안) +
+      baro_calory 207 테스트 통과. baro_calory 버전 범프(root/backend-core 0.5.7, cctv-client 0.1.9, sim 0.4.6).
+      **미해결(이교수님 판단 필요)**: LV_Park_sim_01 은 좁은 폐쇄형(~21×27m)이라 실장비 cam-real-002 의
+      16m/20°/36-49m **클리어 사이트라인 재현 불가** — 44m 남쪽은 단지 정원·건물 뒤라 주차장이 가려진다
+      (실측: visibleRatio 0, 렌더가 잔디/건물). 현재는 남쪽 22m 에 높이만 8/12/16/20m 쌓고 각자 주차중심
+      조준(PitchDeg 개별)해 클리어뷰 확보(틸트 20~42°, 슬롯 슬랜트 12~42m — 실장비 36~49m 와 far row 에서 겹침).
+      실장비 원거리 저각이 필수면 더 개방된 레벨 필요(ini 만 고치면 됨·리빌드 불요). **커밋·push·배포 미수행.**
 - [ ] **나머지 RYU 레벨 빌딩 베이크**: `LV_Park_01 / 04 / 07_A`, `Unity/LV_Park_01_U / 04_U`.
       절차는 `memo.md`의 「RYU 플러그인-프리 베이크」 레시피 그대로. (sim_01·sim_03 완료, sim_02는 RYU無.)
 - [ ] **전 레벨 베이크 완료 후에만** uproject에 `{"Name":"RYUKoreaBuilidngCreator","Enabled":false}`를
