@@ -54,9 +54,12 @@
     (force 시 `slot.carId` 의 옛 차를 `this.cars.delete`). 한쪽만 고치면 문서가 주장하는 "동일 표면"이 깨진다.
     `docs/scene-control-api.md` 의 force 서술을 "덮어쓰기 허용"→"기존 차량 파괴 후 교체(슬롯당 1대)"로 정정.
   - **검증**: baro_calory 전체 테스트 **203/203 통과**(신규 2건 — force 스폰 축출, PATCH force 이동 축출 +
-    교차오염 회귀 가드). **UE 쪽은 미빌드** — `USceneControlSubsystem` 은 `UWorldSubsystem` 이라 Live Coding
-    불가, 에디터 종료 후 풀 리빌드 필요. 0.1.7 이 이미 미커밋 상태라 이 수정을 **0.1.7 에 폴드**(버전 미범프),
-    배포 전 재빌드·재검증 조건. 0.1.8 로 분리 원하면 재스탬프.
+    교차오염 회귀 가드). **UE 에디터 빌드 성공**(증분 8.2초, `UnrealEditor-baroCCTVSimulator.dll` 재링크) 후
+    standalone `-game -RenderOffscreen` 로 띄워 **라이브 /scene API 12/12 통과**: force 스폰이 옛 차를
+    축출(총 1대·id=새 차)·슬롯 점유 승계·옛 차 DELETE 404·교차오염 없음, PATCH force 이동도 대상 슬롯
+    점유 차량 축출·원 슬롯 해제, force 없는 정상 스폰 회귀 없음. 이 수정은 **0.1.7 에 폴드**(버전 미범프)
+    해 서브모듈 `13ede2f` 로 커밋됨(부모 `4f370a9` 포인터 갱신, baro_calory `a18afb2`). push 는 미수행.
+    0.1.8 로 분리 원하면 재스탬프.
   - **여기까지가 확정된 상태다.** 배포 산출물 `Packaged/baro_unreal_sim_v0.2.0_20260722.zip`(2.78GB,
     sha256 `68674c4b…f618f9`, 앱 v0.2.0 / 플러그인 v0.1.6 / Development / `LV_Park_sim_01`).
     이교수님이 현장 기기에 배포해 **48시간 연속 가동**한 뒤(예상 종료 **2026-07-24(금) 14:26 KST**)
