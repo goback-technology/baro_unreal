@@ -9,7 +9,7 @@
 |---|---|---|---|
 | [readme.md](readme.md) | **시작점 / 색인** | `docs/`에서 필요한 문서를 찾을 때 | 문서별 역할, 중요도와 권장 열람 순서를 안내한다. |
 | [windows_build_run.md](windows_build_run.md) | **필독 — 개발·배포 환경** | 새 PC 설정, 프로젝트 파일 생성, Editor 빌드·실행, CCTV 서버 실행, 패키징·zip 배포 시 | Windows 10/11, Unreal Engine 5.8, Visual Studio 환경을 기준으로 `.env` 설정부터 빌드·실행·패키징·배포 확인과 자주 발생하는 오류의 해결 방법까지 설명한다. |
-| [scene-control-api.md](scene-control-api.md) | **필독 — Scene API 개발** | UE 시뮬레이터와 baro_calory 웹·Node·CLI를 연동하거나 `/scene/*` 계약을 수정할 때 | 차량·주차면·카메라 조회 및 차량 CRUD, 투영 오라클, 차량 bounds, 카메라 기준 높이, zoom→HFOV 화각표, 오류 규약과 호출 예제를 정의하는 런타임 REST API 기준 문서다. |
+| [scene-control-api.md](scene-control-api.md) | **필독 — Scene API 개발** | UE 시뮬레이터와 baro_calory 웹·Node·CLI를 연동하거나 `/scene/*` 계약을 수정할 때 | 차량·주차면·카메라 조회 및 차량 CRUD, 투영 오라클, 차량 bounds/클래스 라벨, 카메라 기준 높이·핀홀 내부 파라미터, zoom→HFOV 화각표, 가시성/가림 GT, config 카메라 스포너, Hucoms 연속 PTZ 미러, 오류 규약과 호출 예제를 정의하는 런타임 REST API 기준 문서다(플러그인 v0.1.8 기준). |
 | [sangmyung_team_request.md](sangmyung_team_request.md) | **중요 문서 아님 · 읽을 필요 없음** | 기본적으로 읽지 않는다. 과거 상명대 에셋 작업팀 요청 내용을 확인해야 하는 예외적인 경우만 참고 | 원본 주차장 프로젝트의 에셋·레벨·조명·머티리얼 정리와 납품 형태에 관한 외부 협업 요청서다. 현재 빌드, 런타임 구현 및 API 계약의 기준 문서가 아니다. |
 
 ## 권장 열람 순서

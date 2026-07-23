@@ -150,7 +150,11 @@ Visual Studio로 빌드해도 된다.
 4. 상단 **Play** 버튼을 누른다.
 
 Play를 누르면 레벨에 배치된 CCTV 카메라 수만큼 Hucoms 서버가 열린다.
-HTTP 포트는 보통 `8081`부터, MJPEG 포트는 보통 `8091`부터 사용한다.
+레벨 카메라는 HTTP `8081`부터, MJPEG `8091`부터 사용한다(현재 데모 레벨은 2대 → `8081`/`8082`, `8091`/`8092`).
+
+여기에 더해 `Config\DefaultGame.ini` 의 `+SpawnCameras=(...)`(config 스포너, 플러그인 v0.1.8부터)로
+높이별 카메라 4대가 추가로 스폰된다 — HTTP `8083`~`8086`, MJPEG `8193`~`8196`.
+레벨을 열지 않고 ini 한 줄로 위치·높이·틸트를 바꿀 수 있다. Scene 제어 API 는 `8095`(`ScenePort`)다.
 
 ## CCTV 서버처럼 실행
 
@@ -255,7 +259,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 포트가 열렸는지 확인:
 
 ```powershell
-Get-NetTCPConnection -State Listen -LocalPort 8081,8082,8083,8084,8091,8092,8093,8094
+Get-NetTCPConnection -State Listen -LocalPort 8081,8082,8083,8084,8085,8086,8091,8092,8193,8194,8195,8196,8095
 ```
 
 PTZ 상태 응답 확인:
