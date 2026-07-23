@@ -11,7 +11,52 @@
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
 
-- 2026-07-22 14:26 KST: **v0.2.0 배포 착수 — 48시간 soak 대기 상태로 인계.**
+- 2026-07-23: **scene-control-api.md 정합성 감사(215건 대조) + 정정 12곳 반영. _forAI 보강. (v0.1.7 문서 후속)**
+  - 배경: 응용 SW팀 피드백(차종 치수·카메라 높이·화각 노출 요청) 접수 → README에 「프로젝트 문서(docs/)」
+    「외부 소비자와 협업 컨텍스트」 신설, plan 에 확장 항목 등재. **v0.1.7 확장 구현 자체는 이교수님이
+    별도 세션에서 완료**(`boundsCm`·`groundReference`·`heightAboveReferenceGroundCm`·`intrinsics.zoomHfov`
+    — 계약·검증 상세는 `plan.md` 「/scene API 확장 계획」, 커밋/push/서브모듈 핀은 미수행 상태).
+  - 감사 방법: 문서의 사실 주장 215건을 UE 플러그인·baro_calory 소스와 대조(9섹션 병렬 감사, 불일치는
+    3인 적대 검증 2/3 다수결). v0.1.6 문서 기준으로 돌았고 도중 v0.1.7 문서 갱신이 겹쳐 **전 건을
+    v0.1.7 문서·코드로 재대조**한 뒤 반영했다. (검증 에이전트 일부가 세션 한도로 중단 — 그 몫은 수동 재검증.)
+  - **v0.1.7 갱신이 이미 해소한 것**: `wideHFovDeg` 69.88(선형가설 유물 — 실측 57.14), setcenter "선형 모델"
+    서술(→ tan+구면), FOV 출처 표(→ intrinsics), 라우터 `CAR_TYPE_MAX=22` 하드코딩(→ catalog.carCount 동적),
+    구 0.03px 검증 수치(→ 0.0098px 재검증).
+  - **이번에 `docs/scene-control-api.md` 에 반영한 정정**(전부 현행 코드 실물로 확인): ① `/api/simulator/*`
+    프록시 범위를 씬 부분집합으로 한정(stream/control/devices 등은 calory 자체 기능) ② FakeSceneClient
+    동일 표면의 예외 — `projectPoints` 실 sim 전용, Fake 폴백 시 `/api/simulator/project` 501 ③ 씬 소스 =
+    `devices[]` mode:"sim" 기기의 host+scenePort(구 `config.simulator` 는 deprecated 폴백) — 다이어그램·ini
+    주석 2곳 ④ ScenePort 점유 시 바인드 실패 = `/scene/*` 전체 무응답(UE 로그만, 재시도 없음) ⑤ slots
+    `type` 무접미 BP 변형은 `"slot"` 이 아니라 `"C"`(스트립 순서상 `_C` 잔존 — `"slot"` 폴백은 접두 정확일치
+    비-BP 클래스만) ⑥ cameras `hucomsPort`/`mjpegPort` 는 채널 부재 시(bServeHucoms=false) 액터 설정값
+    폴백(0 가능 — 조인 전 확인) ⑦ `plate.city` 는 저장·에코 전용, **렌더 미반영**(액터에는 prefix+kor+number 만
+    전달) — 본문+캐논 표 ⑧ PATCH 갱신 가능 필드는 carType·color·plate·slotId 뿐, `transform` 은 조용히 무시
+    ⑨ 슬롯 미배치 차량의 응답 `slotId` 는 `null`(요청 분리 표기 `""` 와 비대칭) ⑩ 라우터 경유 스폰은
+    carType·color 필수(400) — sim 직결(기본값 0 채움)과의 계약 차이 명기.
+  - `memo.md` 「동작 규칙」의 setcenter "줌 인식 LINEAR" 서술을 tan+구면(v0.1.4+)으로 정정하고 화각표
+    단일 출처(`ZoomHfovTable` → API 노출, JS 는 폴백)를 반영했다.
+  - **잔여 관찰(문서 아님, 코드 — 필요 시 별건)**: POST `force:true` 스폰은 기존 점유 차량 액터를 파괴하지
+    않고 점유 매핑만 새 차량으로 교체한다 — 옛 차량이 같은 슬롯에 겹친 채 잔존하고, 이후 옛 차량을 DELETE
+    하면 슬롯 점유 해제가 새 차량 점유까지 지울 수 있다(감사 반박 과정에서 코드로 확인). → **같은 날 후속
+    수정(아래).**
+
+- 2026-07-23 (후속): **force 스폰 슬롯 겹침 버그 수정 — 슬롯당 항상 1대 보장(이교수님 지시 "파괴하거나 못하게").**
+  - **버그**: 점유 슬롯에 `force:true` 스폰(또는 PATCH 이동) 시 `SpawnCarActor`(`AlwaysSpawn`)가 옛 차 위에
+    새 차를 **물리적으로 겹쳐** 스폰하고 `SlotOccupancy` 값만 새 carId 로 덮어썼다. 결과 ① 두 액터가 같은
+    슬롯에 중첩(위험) ② 옛 차량이 `Cars` 에 유령으로 잔존 ③ 옛 차량 DELETE 시 `SlotOccupancy.Remove(slot)`
+    가 **새 차량 점유까지** 해제하는 교차 오염.
+  - **수정 = `EvictSlotOccupant(SlotId)` 신설**(`SceneControlSubsystem.{h,cpp}`): force 덮어쓰기 직전 대상
+    슬롯의 기존 점유 차량을 **액터 파괴 + `Cars`/`SlotOccupancy` 정리**로 축출한다. 스폰 경로(`HandleCars`)와
+    PATCH 슬롯 이동(`HandleCarById`) 두 곳에 적용. force 없이는 종전대로 `409`. 이로써 **슬롯당 항상 1대**가
+    되어 겹침·유령·교차오염이 모두 사라진다. (TMap 은 다른 키 Remove 로 타 원소 포인터가 무효화되지 않아
+    PATCH 의 `S` 포인터 안전 — 코드 주석에 근거 기록.)
+  - **계약 정합**: baro_calory `FakeSceneClient.#occupy` 도 동일 버그(옛 차 `this.cars` 잔존)라 **함께 수정**
+    (force 시 `slot.carId` 의 옛 차를 `this.cars.delete`). 한쪽만 고치면 문서가 주장하는 "동일 표면"이 깨진다.
+    `docs/scene-control-api.md` 의 force 서술을 "덮어쓰기 허용"→"기존 차량 파괴 후 교체(슬롯당 1대)"로 정정.
+  - **검증**: baro_calory 전체 테스트 **203/203 통과**(신규 2건 — force 스폰 축출, PATCH force 이동 축출 +
+    교차오염 회귀 가드). **UE 쪽은 미빌드** — `USceneControlSubsystem` 은 `UWorldSubsystem` 이라 Live Coding
+    불가, 에디터 종료 후 풀 리빌드 필요. 0.1.7 이 이미 미커밋 상태라 이 수정을 **0.1.7 에 폴드**(버전 미범프),
+    배포 전 재빌드·재검증 조건. 0.1.8 로 분리 원하면 재스탬프.
   - **여기까지가 확정된 상태다.** 배포 산출물 `Packaged/baro_unreal_sim_v0.2.0_20260722.zip`(2.78GB,
     sha256 `68674c4b…f618f9`, 앱 v0.2.0 / 플러그인 v0.1.6 / Development / `LV_Park_sim_01`).
     이교수님이 현장 기기에 배포해 **48시간 연속 가동**한 뒤(예상 종료 **2026-07-24(금) 14:26 KST**)

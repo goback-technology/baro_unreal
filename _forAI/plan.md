@@ -4,6 +4,7 @@
 
 - [Current goal](#current-goal)
 - [Near-term work](#near-term-work)
+- [/scene API 확장 계획 (v0.1.7 구현 완료)](#scene-api-확장-계획-v017-구현-완료)
 - [Structure decisions](#structure-decisions)
 - [Risks](#risks)
 
@@ -33,6 +34,10 @@
       묶여 있다. v0.1.6 으로 올리려면 그쪽 `DefaultEngine.ini` 에도 `r.Lumen.HardwareRayTracing=True` 가
       필요하다(없으면 가드가 persist 를 꺼 v0.1.5 와 같은 화질이 된다 — 누수는 없음). 별건·이교수님 판단.
 
+- [x] **/scene API 확장 — 플러그인 v0.1.7 구현 완료(응용 SW팀 요청 접수 2026-07-23)**:
+      차종별 실제 치수, 카메라 기준면 높이, zoom→HFOV 화각표를 기존 응답에 하위 호환 필드로 추가한다.
+      상세 계약·결정 항목·검증 결과는 아래 [전용 계획](#scene-api-확장-계획-v017-구현-완료)을 따른다.
+      2026-07-23 에디터 빌드, UE 자동화 4개, JS 테스트 200개와 standalone 실응답 검증을 통과했다.
 - [ ] **나머지 RYU 레벨 빌딩 베이크**: `LV_Park_01 / 04 / 07_A`, `Unity/LV_Park_01_U / 04_U`.
       절차는 `memo.md`의 「RYU 플러그인-프리 베이크」 레시피 그대로. (sim_01·sim_03 완료, sim_02는 RYU無.)
 - [ ] **전 레벨 베이크 완료 후에만** uproject에 `{"Name":"RYUKoreaBuilidngCreator","Enabled":false}`를
@@ -50,6 +55,128 @@
 - [ ] 나머지 `LV_Park` 레벨(02~08)에도 PTZ 배치 — **필요해지면**. (배치 규약: `BP_Pole` 자식, z+600, pitch −20)
 - [ ] `sim_03` 병합메시 Nanite 불가(144 머티리얼 섹션 > 한계). **필요하면** Merge Materials=on으로 재병합.
       VSM 그림자 경고는 잔존하나 콜리전 제거로 실부하는 이미 해소됨.
+
+## /scene API 확장 계획 (v0.1.7 구현 완료)
+
+> 상태(2026-07-23): 코드·계약 문서·버전 반영과 로컬 검증 완료. 커밋·push·소비 저장소의
+> 서브모듈 핀 갱신 및 배포는 이번 요청 범위에 포함하지 않아 수행하지 않았다.
+
+### 목표와 범위
+
+응용 SW팀이 제조사 공표 치수나 클라이언트 내부 상수 사본에 의존하지 않고, 실행 중인 sim의
+`/scene/*` 응답만으로 차량 3D 크기와 카메라 모델을 구성할 수 있게 한다.
+
+- 포함: 차종별 차량 bounds, 주차면에서 유도한 기준 지면과 카메라 높이, zoom→HFOV 화각표.
+- 연동 포함: baro_calory 실 클라이언트·Fake 응답·입력 검증·계약 테스트.
+- 제외: 현재 PTZ/current FOV의 `/scene/cameras` 중복 노출(계속 Hucoms `getptzfpos` 사용),
+  차량별 가시성/가림 GT(카메라별 segmentation 계약이 필요한 별도 과제).
+- 호환성: 기존 필드는 삭제·변경하지 않고 새 필드만 추가한다.
+
+### 화각표 정의
+
+화각표는 `zoompos`와 실측 수평 화각 HFOV(deg)의 앵커 목록이다. 현재 13개 앵커
+(`0→57.14°` … `16384→2.39°`) 사이를 선형 보간하고 범위 밖은 양 끝에서 클램프한다.
+망원 포화와 비선형 구간 때문에 `wideHFovDeg` 하나만으로 대체할 수 없다.
+
+구현 시 `HucomsProtocol.h::ZoomPosToHFov` 내부의 표를 공용 `constexpr` 데이터로 분리해
+계산과 JSON 직렬화가 같은 데이터를 사용하게 한다. JS는 API 응답을 우선 사용하고 내장 표는
+실카메라·오프라인 폴백으로만 유지한다.
+
+제안 응답(필드명은 구현 착수 전 최종 확정, 아래 `zoomHfov`는 첫/끝점만 보인 축약 예시):
+
+```json
+{
+  "intrinsics": {
+    "interpolation": "linear",
+    "clamp": true,
+    "zoomHfov": [
+      { "zoomPos": 0, "hfovDeg": 57.14 },
+      { "zoomPos": 16384, "hfovDeg": 2.39 }
+    ]
+  }
+}
+```
+
+### 차량 치수
+
+`/scene/catalog.cars[]`에 cm 단위 bounds를 추가한다. 축 의미를 검증하기 전에는
+`length/width/height`로 추정하지 않고 UE 로컬 축 `x/y/z`를 그대로 노출한다.
+
+```json
+{
+  "boundsCm": {
+    "coordinateSpace": "actorLocal",
+    "center": { "x": 2.1, "y": 0.0, "z": 72.3 },
+    "size": { "x": 471.2, "y": 186.0, "z": 144.5 },
+    "source": "renderedMeshAggregate"
+  }
+}
+```
+
+구현 결정:
+
+1. `Mesh_List`의 주 `UStaticMesh::GetBounds()`만 사용하면 빠르고 결정적이지만 휠·번호판 등
+   자식 컴포넌트를 제외할 수 있다.
+2. 차종을 적용한 임시 `BP_Car`에서 표시 중인 `UMeshComponent`를 자식 액터까지 합치면 휠·번호판
+   메시를 포함하면서 가변 `TextRender`는 제외할 수 있다. actor-local `center`도 함께 제공해야
+   차량 피벗과 bounds 중심이 다른 에셋의 3D 박스를 정확히 배치할 수 있다.
+3. 파인튜닝 3D 라벨 목적에 필요한 최종 렌더 형상을 보존하기 위해 2번을 채택했다. 실행 검증에서
+   23종 모두 양수 bounds였고 크기 범위는 X `362.19..526.06`, Y `182.77..238.39`,
+   Z `133.06..251.35` cm였다.
+
+### 기준 지면과 카메라 높이
+
+현재 장면은 슬롯 24개의 Z가 모두 10cm인 평면이지만 이를 영구 전제로 하드코딩하지 않는다.
+`/scene/cameras`에 슬롯 Z 중앙값으로 만든 **기준면**과 광학중심의 기준면 대비 높이를 추가한다.
+경사·다층 장면의 로컬 지면과 혼동하지 않도록 일반적인 `groundZ` 대신 출처가 드러나는 이름을 쓴다.
+
+```json
+{
+  "groundReference": {
+    "zCm": 10.0,
+    "method": "parkingSlotPlacementOriginMedian",
+    "sampleCount": 24,
+    "maxDeviationCm": 0.0
+  },
+  "heightAboveReferenceGroundCm": 575.0
+}
+```
+
+슬롯이 없으면 기준면과 파생 높이는 `null`로 반환한다. `maxDeviationCm`을 함께 제공해 소비자가
+평면 가정을 적용해도 되는지 판단하게 한다. 향후 경사·다층 지원이 필요할 때만 카메라 하향
+레이캐스트 기반 `heightAboveLocalGroundCm`을 별도 설계한다.
+
+### 구현 순서와 검증
+
+1. **차량 bounds 의미 확정**
+   - 23종의 주 메시 bounds와 최종 액터 aggregate bounds를 비교하고 휠·번호판 포함 여부를 기록한다.
+   - 검증: 모든 축이 양수이고 대표 차종의 UE 에디터 bounds와 허용오차 내 일치.
+2. **화각표 단일 소스화**
+   - C++ 앵커를 공용 상수로 분리하고 기존 `ZoomPosToHFov`가 이를 사용하도록 유지한다.
+   - 검증: 13개 앵커, 중간 보간, 양끝 클램프 테스트가 변경 전 수치와 동일.
+3. **카탈로그와 카메라 JSON 확장**
+   - `cars[].boundsCm`, `cameras[].groundReference`,
+     `cameras[].heightAboveReferenceGroundCm`, `cameras[].intrinsics` 추가.
+   - 검증: 기존 필드 스냅샷 불변, 24슬롯 장면에서 기준 Z=10cm·카메라 높이=575cm.
+4. **baro_calory 연동**
+   - `FakeSceneClient`에 동일 shape를 추가하고 웹 투영이 API 화각표를 우선 사용하게 한다.
+   - 하드코딩된 `CAR_TYPE_MAX=22`를 실제 카탈로그 `carCount-1` 검증으로 바꾼다.
+   - 검증: 기존 계약 테스트 + 24번째 가상 차종 허용/범위 밖 400 테스트.
+5. **회귀 검증**
+   - UE 자동화 테스트, 에디터 풀 빌드, PIE/standalone API 실응답을 확인한다.
+   - 기존 JS 재투영과 `/scene/project`의 pan/tilt/zoom 전체 최대 오차 0.03px 이하 유지.
+6. **버전·문서·배포 사슬**
+   - 플러그인 `0.1.7` 범프와 `docs/scene-control-api.md`/baro_calory 계약 문서 갱신 완료.
+   - 커밋·push·소비 저장소 서브모듈 핀 갱신은 별도 명시 요청 시 수행한다.
+   - `UWorldSubsystem` 변경이므로 Live Coding 없이 에디터 종료 후 풀 리빌드한다.
+
+### 완료 조건
+
+- 23개 모든 차종에 출처가 명시된 양수 bounds가 반환된다.
+- 카메라별 기준 지면·높이와 13개 화각 앵커가 API만으로 해석 가능하다.
+- 기존 클라이언트는 새 필드를 무시해도 그대로 동작한다.
+- UE/JS 화각 계산과 투영 오라클의 수치가 회귀하지 않는다.
+- 가시성/가림 GT는 이번 버전에 섞지 않는다.
 
 ## Structure decisions
 
