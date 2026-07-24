@@ -29,6 +29,11 @@
     유휴 30초 후 6대 자동 해제, 카메라 전환 시 이전 1대만 해제, warm 재요청 0.091s(콜드 0.191s).
   - 패키징: `Config/DefaultGame.ini` `ProjectVersion=0.2.1`. 쿡은 MCP/AllToolsets 임시 off +
     GameFeatures 에디터전용 토글 절차 그대로(2026-07-23 확립).
+  - 패키지 유휴 실측: WorkingSet **15.2 → 4.17 GB**, Private 16.4 → 8.61 GB, GPU 3D 3.3%.
+  - 튜닝 확정(이교수님): `IdleReleaseSeconds=10`(30초는 길다), `MaxActiveCameras=1` 유지하되
+    2 이상도 즉시 가능(LRU 검증 완료 — ini 수정 없이 커맨드라인 오버라이드로 확인).
+    콜드 첫 스냅샷 약 3초는 **워밍업이 아니라 자원 생성(2.2초)이 주범**이라 워밍업은 4로 유지하고
+    이유를 문서화하는 쪽으로 결정(플러그인 DEVELOPER_GUIDE §9).
 - 2026-07-23 17:14 KST: **v0.2.0 26시간 중간 soak — 이교수님 "합격" 판정. 누수 종결 확인.**
   - 배포 기기(다른 PC, `C:\Users\lsj-goback\Desktop\baro_unreal_sim_v0.2.0_20260722`)에서 07-22 14:55
     가동 개시, **26.3시간 시점**의 `BaroHealth-20260722-145513.csv`(3096 샘플, 391KB) 조기 회수·분석.
