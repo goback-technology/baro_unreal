@@ -57,6 +57,30 @@
 - [ ] **성능: 캡처 파이프라인 오프스레드화** — 4캠 동시 24fps가 필요해지면 착수.
       JPEG 인코딩 오프스레드(`UE::Tasks`) → 블로킹 `ReadPixels` → 비동기 `FRHIGPUTextureReadback`
       → `jpeg.cgi` 스냅샷 캐시. (근거: baro_calory dev_log 2026-07-02 저녁 진단)
+      ※ 앞 두 항목(오프스레드 인코딩·비동기 리드백)은 **플러그인 v0.1.10 에서 구현됨**. 남은 것은
+      `jpeg.cgi` 스냅샷 캐시인데, 소비자 쪽(baro_calory)이 프리뷰를 스트림 프레임으로 돌리면서
+      급한 불은 껐다(2026-07-29, `preview-snapshot.mjs`). 캐시는 필요해지면 착수.
+
+- [ ] **캡처 페이싱의 계단 양자화 제거 — 플러그인 1줄, 다음 플러그인 갱신 때 함께 넣을 것.**
+      `HucomsServerSubsystem.cpp` Tick 의 스트림 페이싱이 **제출을 못 해도 누적기 예산을 먼저 깎는다**:
+      ```cpp
+      if (Ch.StreamAccum >= Interval) {
+          Ch.StreamAccum = FMath::Min(Ch.StreamAccum - Interval, Interval);   // 먼저 깎고
+          ...
+          if (Ch.StreamCapState == EStreamCapState::Idle)                     // 그 다음 판정
+              SubmitStreamCapture(Ch, bCold);                                 // InFlight 면 기회가 소멸
+      }
+      ```
+      채널당 in-flight 가 1개라, GPU 왕복이 `Interval`(=1/StreamFps=33.3ms)을 넘으면 그 제출 기회가
+      통째로 버려진다. 그래서 실효 fps 가 `StreamFps/k` 로만 나온다 — **30 / 15 / 10 / 7.5**.
+      지연이 조금만 나빠져도 절벽으로 떨어지고, 반대로 개선해도 계단을 못 넘으면 숫자가 전혀
+      안 움직여 **개선 여부를 측정할 수 없다**(이번에 RT 풀 튜닝이 그래서 판정이 어려웠다).
+      **수정**: `Idle` 판정을 누적기 차감 **앞으로** 옮긴다 → `min(StreamFps, 1/지연)` 의 연속 저하가 된다.
+      **실측 근거(2026-07-29, 배포기 192.168.0.22)**: v0.2.3(RT 풀 1600MB) 적용 후 25.9fps 인데,
+      563장 중 377장만 33ms 이내로 오고 나머지는 한 칸 미끄러진다(간격이 33ms 와 62ms 사이 진동).
+      이 한 줄이 남은 4fps 를 회수한다. 30fps 를 여유 있게 넘기려면 in-flight 다중화(링버퍼)가
+      필요하지만 그건 별건이고 수명 관리 재검증이 따른다 — 우선 이 한 줄부터.
+      ⚠ 공유 서브모듈이라 버전 범프 → 풀 리빌드 → push → baro_unreal·baroQuantum 서브모듈 갱신 사슬.
 
 ### 조건부 / 유보 (실제로 문제가 될 때만)
 
