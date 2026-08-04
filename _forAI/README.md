@@ -61,7 +61,7 @@
 
 - 저장소 경로: `C:\works\ue_prjs\baro_unreal`
 - 대상 플랫폼: Unreal Engine 5.8 / **Windows 11·Win64 전용**. DX12/SM6 고품질 렌더 경로를 사용하며 Linux 버전은 보류한다.
-- 현재 버전: 앱 **v0.2.0** + `baroCCTVSimulator` v0.1.7 작업본. 기본 배포 맵은 `/Game/simulator/LV_Park_sim_01`이다.
+- 현재 버전: 앱 **v0.2.4** + `baroCCTVSimulator` v0.1.13 작업본. 기본 배포 맵은 `/Game/simulator/LV_Park_sim_01`이다.
   배포 zip 이름은 앱 버전에서 자동 생성한다(`./Scripts/package.ps1 -Zip`). 0.2.0 이전 수동 zip은 **플러그인** 버전으로 이름이 붙어 있어 숫자를 직접 비교하면 안 된다.
 - 메인 엔트리포인트: `UHucomsServerSubsystem` + `APTZCamera` + `USceneControlSubsystem`(전부 `baroCCTVSimulator` 플러그인). 패키지 기본값은 960×540 창모드, Epic 품질·해상도 품질 100이다.
 - 노출 포트 기본값: Hucoms CGI `8081+i` / MJPEG `8091+i`(카메라 인덱스별, 액터별 명시 포트 우선),

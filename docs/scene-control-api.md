@@ -6,8 +6,10 @@ UE 시뮬레이터의 씬(주차면·차량·카메라 파라미터)을 **실행
 프록시한다(`stream`·`control`·`status`·`probe`·`devices` 등 나머지 `/api/simulator/*`는 baro_calory
 자체 기능이며 이 문서의 범위 밖이다). 웹UI·CLI·(향후) MCP가 전부 이 하나의 제어면을 공유한다.
 
-> 문서 기준: 플러그인 v0.1.8 (2026-07-23). JSON은 현재 계약의 필드 구조 예시이며,
+> 문서 기준: 플러그인 v0.1.13 (2026-08-03). JSON은 현재 계약의 필드 구조 예시이며,
 > 숫자는 별도 실측 표기가 없는 한 설명용 값이다.
+> 실행 중인 sim 은 `GET /scene/help` 로 에이전트용 사용 안내를 스스로 서빙한다 — 그쪽 산문의
+> 원본은 플러그인 `docs/scene-help.md` 이며, API 표면 변경 시 본 문서와 같이 갱신한다.
 
 ## 목차
 
@@ -18,10 +20,14 @@ UE 시뮬레이터의 씬(주차면·차량·카메라 파라미터)을 **실행
    - [GET /scene/catalog](#get-scenecatalog)
    - [GET /scene/slots](#get-sceneslots)
    - [GET /scene/cameras](#get-scenecameras)
+   - [POST /scene/cameras · PATCH·DELETE /scene/cameras/:id](#post-scenecameras--patchdelete-scenecamerasid)
+   - [GET·POST /scene/snapshot](#getpost-scenesnapshot)
    - [POST /scene/project](#post-sceneproject)
    - [GET /scene/cars · POST /scene/cars](#get-scenecars--post-scenecars)
+   - [배치 기준과 변형 (offset)](#배치-기준과-변형-offset)
    - [GET·PATCH·DELETE /scene/cars/:id](#getpatchdelete-scenecarsid)
    - [POST /scene/reset](#post-scenereset)
+   - [GET /scene · GET /scene/help](#get-scene--get-scenehelp)
 5. [데이터 모델과 카탈로그 캐논](#데이터-모델과-카탈로그-캐논)
 6. [에러 규약](#에러-규약)
 7. [카메라 파라미터와 3D→2D 오버레이 투영](#카메라-파라미터와-3d2d-오버레이-투영)
@@ -253,6 +259,51 @@ ParkingSlotClassPrefix=BP_ParkingSlot
   클라이언트는 다시 스케일하지 않고 표를 그대로 선형 보간·양끝 클램프한다.
 - `fixed` = `bFixedMode`(고정형 카메라 — PTZ 명령 무시, 스트림은 정상).
 
+### POST /scene/cameras · PATCH·DELETE /scene/cameras/:id
+
+**카메라 런타임 생명주기**(v0.1.13) — 레벨·ini 수정 없이 새 시점을 만들고 옮기고 없앤다.
+동기는 BEV 파인튜닝의 병목 제거: 학습 데이터의 성능은 카메라 기하 다양성에서 나오는데
+(`paper_works/object3d_model_review` 실측 — 학습에 없던 5.75m 높이에서 공개 체크포인트 재현율 0%),
+기존 config 스포너는 포즈를 바꾸려면 ini 수정 + 재시작이었다.
+
+```json
+POST /scene/cameras
+{ "location": { "x": 73, "y": -2015, "z": 1000 }, "yawDeg": 90, "pitchDeg": -30,
+  "httpPort": 8287, "mjpegPort": 8297, "fixed": false, "note": "test" }
+```
+
+- `location` = 광학중심 월드 cm(레버암 0), `yawDeg` 기본 0, `pitchDeg` 기본 -20(음수 = 하향 —
+  config 스포너와 같은 규약으로 **tilt 로 이관**되어 롤이 생기지 않는다).
+- **포트 명시 필수**(자동 부여는 열거순 비결정이라 불허). 씬 포트·기존 채널과 겹치면 `400` + 원인.
+- 스폰 즉시 그 포트의 Hucoms CGI(getptzfpos·jpeg.cgi)와 MJPEG 가 산다(리스너 런타임 증설).
+  응답 `{ camera: {...} }` 는 GET 목록 항목과 동일 shape.
+- `GET /scene/cameras` 각 항목에 `spawned`(bool, v0.1.13) 추가 — true 인 카메라만 이동·삭제 가능.
+  **레벨 저작 카메라는 `403`** (저작은 에디터 소관 — API 가 레벨을 편집하지 않는다).
+- `PATCH /scene/cameras/:id` (id 또는 hucomsPort) = 설치 자세 갱신(넘긴 필드만:
+  `location`/`yawDeg`/`pitchDeg`). pitchDeg 는 채널 tilt 로 반영돼 다음 캡처부터 새 시점.
+- `DELETE /scene/cameras/:id` = in-flight 캡처 flush → 라우트 unbind → MJPEG 정지 → 캡처 자원
+  반납 → 액터 파괴. 그 포트는 즉시 닫힌다.
+
+### GET·POST /scene/snapshot
+
+**씬 스냅샷**(v0.1.13). "살아있는 월드가 진실, 저장은 호출자" 철학 유지 — 서버는 파일을 남기지
+않고, GET 이 복원 가능한 JSON 을 주고 POST 가 그 JSON 을 그대로 받는다. LLM/에이전트 실험의
+재현 단위다(데이터셋 생성 루프: 스냅샷 → 변형 → 캡처 → 복원).
+
+- **GET** → `{ level, pluginVersion, savedAtUtc, cars: [...], cameras: [...] }`
+  - `cars[]` = `/scene/cars` 항목과 동일 + **자유 배치 차량에만 `baseTransform`**(응답 `transform`
+    은 offset 이 합성된 값이라 그대로 기준으로 쓰면 offset 이 두 번 적용된다 — 그래서 기준을 따로 싣는다).
+  - `cameras[]` = **스폰 카메라만**(자동/config/API — 레벨 저작 카메라는 레벨이 진실이라 범위 밖):
+    `{id, location, yawDeg, pitchDeg, httpPort, mjpegPort, fixed}`. pitchDeg 는 현재 채널 tilt 의
+    역변환(설치 + 이후 PTZ 조작 반영).
+- **POST**(GET 응답 그대로) — 차량은 전량 리셋 후 재배치(**id 재부여** — id 는 보존 안 됨),
+  카메라는 `httpPort` 를 키로 reconcile: 같은 포트 = 제자리 이동(포트 재바인드 없음), 새 포트 = 스폰,
+  스냅샷에 없는 스폰 카메라 = 제거. mjpegPort/fixed 가 달라졌으면 제거 후 재스폰.
+  - 레벨 불일치 `409`(다른 월드의 좌표 — `force:true` 로 강행).
+  - 응답 `{ cars:{restored}, cameras:{spawned,moved,removed}, failures:[문장...] }` —
+    부분 실패(주차면 소실 등)는 `failures` 로 보고하고 나머지는 진행한다.
+- 범위 밖: 레벨 저작 액터, 현재 PTZ 상태(Hucoms 축 — 필요 시 `goptzfpos` 로 별도 복원).
+
 ### POST /scene/project
 
 월드 점들을 지정 카메라의 화면 픽셀로 투영한 **그라운드-트루스**. UE가 실제 렌더에 쓰는
@@ -292,9 +343,15 @@ GET = 현재 배치된 차량 목록:
 
 ```json
 { "cars": [ { "id": "car-01", "slotId": "BP_ParkingSlot_C_15", "transform": { ... },
+              "offset": { "location": { "x": 0, "y": 18, "z": 0 },
+                          "rotation": { "pitch": 0, "yaw": 8, "roll": 0 } },
               "carType": 3, "color": 4,
               "plate": { "type": 0, "city": "서울", "prefix": "123", "kor": "가", "number": "4567" } } ] }
 ```
+
+- `transform`은 월드에 실제로 선 자리, `offset`(**v0.1.11부터**)은 배치 기준에 대한 상대 변형이다.
+  둘의 관계는 아래 [배치 기준과 변형](#배치-기준과-변형-offset)에 있다. offset 없이 스폰한 차량은
+  항등(전부 0)이 실려 나오므로 기존 소비자는 무시하면 된다.
 
 - **가시성 GT(선택, v0.1.8부터)**: `GET /scene/cars?visibility=<cameraId|hucomsPort>` 이면 각 차량에
   `visibleRatio`(0=완전가림 … 1=완전노출)를 실고 응답 최상위에 `visibilityCamera`를 에코한다. 지정
@@ -302,13 +359,16 @@ GET = 현재 배치된 차량 목록:
   근사값이다(대상 차량 자신은 무시 = 타 물체에 의한 가림만 측정). 파라미터가 없으면 기존 응답 그대로.
   없는 카메라면 `404`. 프레임 안/밖 판정은 `/scene/project`로 별도로 한다.
 
-POST = 스폰. `slotId`(슬롯 배치, 트랜스폼은 슬롯 것) 또는 `transform`(자유 좌표) 중 하나 필수:
+POST = 스폰. 배치 기준은 `slotId`(주차면 트랜스폼) 또는 `transform`(자유 좌표) 중 **하나**이고,
+`offset`(선택)은 그 기준의 로컬 축에서 준 변형이다:
 
 ```json
 {
   "slotId": "BP_ParkingSlot_C_15",
   "carType": 3,
   "color": 4,
+  "offset": { "location": { "x": -16, "y": 12, "z": 0 },
+              "rotation": { "pitch": 0, "yaw": 7, "roll": 0 } },
   "plate": { "type": 0, "city": "서울", "prefix": "123", "kor": "가", "number": "4567" },
   "force": false
 }
@@ -316,6 +376,8 @@ POST = 스폰. `slotId`(슬롯 배치, 트랜스폼은 슬롯 것) 또는 `trans
 
 - 점유된 슬롯이면 `409`. `force: true`면 **기존 점유 차량을 파괴(제거)한 뒤** 새 차량으로 교체한다 —
   슬롯당 항상 1대이며 겹쳐 스폰되지 않는다. 없는 슬롯이면 `404`.
+- `slotId`와 `transform`을 **함께 주면 `400`**(v0.1.11부터). 어느 쪽을 버릴지 정할 근거가 없어서다.
+  주차면에 붙인 채로 자리를 흔들고 싶은 것이면 `transform`이 아니라 `offset`이다.
 - 응답 = `{ "car": { ...스폰된 차량 상태... } }`. `id`는 `car-01`, `car-02`... 순번.
 - 값 범위는 서버가 클램프하지만, baro_calory 라우터가 프록시 전에 `400`으로 먼저 거른다
   (`carType` 0..현재 catalog.carCount-1, color 0..7, plate.type 0..2).
@@ -324,14 +386,52 @@ POST = 스폰. `slotId`(슬롯 배치, 트랜스폼은 슬롯 것) 또는 `trans
   `city`는 정규화 없는 임의 문자열이지만 **API 상태로 저장·에코만 되고 렌더에는 반영되지 않는다**
   — 현 구현이 액터에 전달하는 번호판 텍스트는 `prefix+kor+number`뿐이다.
 
+### 배치 기준과 변형 (offset)
+
+**v0.1.11부터.** 차 한 대의 배치는 **기준(base)** 과 **변형(offset)** 두 조각으로 들고 있고,
+월드에 서는 자리는 언제나 그 둘의 합성이다:
+
+```text
+최종 배치 = offset 을 기준의 로컬 축에서 적용한 뒤, 기준으로 월드에 옮긴 것
+          = UE FTransform 곱 (Offset * Base)
+```
+
+- **기준**은 `slotId`면 그 주차면의 트랜스폼, `transform`이면 준 좌표 그대로다.
+- **변형의 축은 월드축이 아니라 기준의 로컬축**이다. `sim_01`의 주차면 yaw는 `-87.51` 같은 값이라
+  이 구분이 곧 정오답이다 — `location.y`는 "월드 Y"가 아니라 **그 주차면이 향한 방향 기준의 좌우**,
+  `location.x`는 앞뒤, `rotation.yaw`는 주차면 방위에 **더해지는 상대 각**이다(`180` = 정확히 반대로 주차).
+- **변형은 값이지 누적 델타가 아니다.** 같은 `offset`을 PATCH로 다시 보내도 차는 더 밀리지 않는다.
+- **기준이 바뀌면 변형이 따라간다.** `PATCH {"slotId": ...}`로 주차면을 옮기면 비껴 선 정도와 틀어진
+  각도를 유지한 채 새 주차면에서 같은 상대 자세로 선다.
+- 응답의 `offset`은 **보낸 값 그대로**다(사분원수를 거치지 않는다). 반대로 `transform`은 합성 결과라
+  회전이 오일러로 재분해된 값이다.
+- 주차면에 붙인 채 변형하므로 **점유·`carId` 조인은 그대로 산다**. 자유 좌표로 빼내야만 얻던 자세를
+  주차면 소속을 잃지 않고 얻는 것이 이 필드의 존재 이유다.
+- **겹침은 서버가 막지 않는다.** 스폰은 `AlwaysSpawn`이라 옆 차를 파고들어도 밀려나지 않고 준 자리에
+  그대로 선다(의도된 동작 — 밀려나면 GT 라벨과 실제 위치가 어긋난다). 넣을 수 있는 변형의 한계는
+  호출자가 `catalog.cars[].boundsCm.size`와 주차면 규격으로 계산한다.
+
+이 합성의 JS 참조 구현과 계약 검증 하네스는 **이 저장소 안** [tools/scene-test/](../tools/scene-test/)에
+있다(`offset-contract.mjs` — 의존성 0, 실행 중 sim 에 수치·동작 계약을 전부 대조).
+2026-08-03 실기동 대조에서 10개 자세(다축·짐벌 임계 밴드 안팎 포함) 전부 **위치 오차 0cm,
+회전 최대 5.6e-12°** 로 일치했다. 짐벌 락(피치 ±90) 구간에서 UE가 roll을 yaw로 접어 넣는
+규약까지 참조 구현에 포함돼 있다. 소비 저장소(baro_calory 등)는 필요해질 때 이 참조 구현을
+가져다 쓰면 된다 — 시뮬 계약 검증을 위해 소비 저장소를 수정하지 않는다(2026-08-03 확정).
+
 ### GET·PATCH·DELETE /scene/cars/:id
 
 - GET → `{ "car": { ... } }`. 없으면 `404`.
-- PATCH = 부분 갱신(넘긴 필드만). 갱신 가능한 필드는 **`carType`·`color`·`plate`·`slotId`(+`force`)뿐**이다 —
-  `transform`은 읽지 않고 조용히 무시된다(자유 좌표 이동이 필요하면 DELETE 후 `transform`으로 재스폰).
-  `plate`는 필드 단위 병합. `slotId` 변경 = 슬롯 이동(이전 슬롯 해제,
-  새 슬롯 점유·트랜스폼 적용; 점유 시 `409`, `force`면 **대상 슬롯의 기존 차량을 파괴 후** 이동).
-  `"slotId": ""` = 슬롯에서 분리.
+- PATCH = 부분 갱신(넘긴 필드만): `carType`·`color`·`plate`·`slotId`(+`force`)·`transform`·`offset`.
+  `plate`는 필드 단위 병합.
+- 배치 관련 세 필드는 이렇게 갈린다(**`transform`·`offset`은 v0.1.11부터** — 그 전에는 `transform`이
+  조용히 무시됐다):
+  - `slotId` 변경 = 주차면 이동(이전 주차면 해제, 새 주차면 점유; 점유 시 `409`, `force`면
+    **대상 주차면의 기존 차량을 파괴 후** 이동). 변형은 유지된 채 새 기준 위에 다시 얹힌다.
+  - `"slotId": ""` = 주차면에서 분리. 점유만 풀고 **차는 있던 자리에 그대로 선다**.
+  - `transform` = 자유 좌표로 기준 교체. 주차면에 붙어 있었다면 그 점유는 풀린다.
+    `slotId`(비어 있지 않은 값)와 동시에 주면 `400`.
+  - `offset` = 변형 교체. 기준은 건드리지 않는다.
+- 배치 필드를 하나도 안 넘긴 PATCH(예: 색상만)는 차를 움직이지 않는다.
 - 슬롯 미배치 차량(`transform` 스폰 또는 `""` 분리 후)의 **응답** `slotId`는 빈 문자열이 아니라
   `null`로 직렬화된다(요청의 분리 표기 `""`와 비대칭).
 - DELETE → 액터 파괴 + 슬롯 해제, `{ "removed": "car-01" }`.
@@ -343,6 +443,22 @@ POST = 스폰. `slotId`(슬롯 배치, 트랜스폼은 슬롯 것) 또는 `trans
 ```json
 { "cleared": 2 }
 ```
+
+### GET /scene · GET /scene/help
+
+**자기서술**(v0.1.12부터) — 소스·저장소·문서 없이 씬 포트 하나로 접속한 에이전트가 전체 계약을
+발견하도록, 실행 중인 sim 이 이 API 의 사용 안내를 `text/markdown` 으로 직접 서빙한다.
+
+- **산문의 원본은 플러그인 `docs/scene-help.md` 텍스트 파일**이다 — C++ 에 박혀 있지 않아
+  문구 수정은 파일 저장이 전부다(리빌드·재시작 불필요, 요청마다 다시 읽는다). 단, **API 표면을
+  바꾸는 변경은 이 파일과 본 문서를 같이 고쳐야 한다** — 코드가 계약을 바꿨는데 help 가 옛
+  계약을 서빙하면 자기서술이 거짓말이 된다.
+- `{{LEVEL}}` `{{PLUGIN_VERSION}}` `{{SCENE_PORT}}` `{{SLOT_COUNT}}` `{{CAMERA_COUNT}}`
+  `{{SPAWNED_CAR_COUNT}}` 토큰은 서빙 시각에 라이브 값으로 치환된다(낡을 수 있는 수치를
+  문서에 박지 않는 규율).
+- 패키징 빌드에는 `Build.cs` 의 `RuntimeDependencies`(NonUFS)로 원본 텍스트가 그대로 실린다 —
+  pak 밖 루즈 파일이라 배포 후에도 편집 가능하다. 파일이 없으면 404 대신 내장 최소 도움말로
+  응답한다(발견 가능성 유지).
 
 ## 데이터 모델과 카탈로그 캐논
 
@@ -368,7 +484,7 @@ sim의 HTTP status를 baro_calory가 코드로 매핑해 그대로 되돌린다(
 
 | HTTP | 의미 | baro_calory 코드 |
 |---|---|---|
-| 400 | 잘못된 입력(JSON 파싱 실패, slotId/transform 둘 다 없음 등) | `BAD_INPUT` |
+| 400 | 잘못된 입력(JSON 파싱 실패, slotId/transform 둘 다 없음, 둘을 동시에 지정) | `BAD_INPUT` |
 | 404 | 슬롯/차량/카메라 없음 | `NOT_FOUND` |
 | 409 | 슬롯 점유됨(`force`로 무시 가능) | `OCCUPIED` |
 | 500 | 차량 BP 로드/스폰 실패 | — |
@@ -460,6 +576,16 @@ curl -X POST http://127.0.0.1:8095/scene/cars \
   -H "content-type: application/json" \
   -d '{"slotId":"BP_ParkingSlot_C_15","carType":3,"color":4,"plate":{"type":0,"prefix":"123","kor":"가","number":"4567"}}'
 
+# 같은 주차면에 조금 비뚤게 주차 (우측 12cm, 뒤로 16cm, 7도 틀어서)
+curl -X POST http://127.0.0.1:8095/scene/cars \
+  -H "content-type: application/json" \
+  -d '{"slotId":"BP_ParkingSlot_C_16","carType":9,"color":1,
+       "offset":{"location":{"x":-16,"y":12},"rotation":{"yaw":7}}}'
+
+# 이미 세운 차를 반대 방향으로 돌려 세우기 (자리는 그대로)
+curl -X PATCH http://127.0.0.1:8095/scene/cars/car-01 \
+  -H "content-type: application/json" -d '{"offset":{"rotation":{"yaw":180}}}'
+
 # 번호판만 교체
 curl -X PATCH http://127.0.0.1:8095/scene/cars/car-01 \
   -H "content-type: application/json" -d '{"plate":{"number":"7777"}}'
@@ -486,8 +612,17 @@ pnpm sim:catalog && pnpm sim:slots && pnpm sim:cars     # CLI 하네스
 
 ## 버전·소스 위치
 
-- 버전 규칙: 플러그인 `.uplugin` `VersionName` = **0.1.0 시작, 수정 시 끝자리 +1**. 현재 문서 기준은 **0.1.8**.
+- 버전 규칙: 플러그인 `.uplugin` `VersionName` = **0.1.0 시작, 수정 시 끝자리 +1**. 현재 문서 기준은 **0.1.12**.
   런타임 확인 = `/scene/catalog.pluginVersion`, sim HUD 제목줄, 웹 `/simulator` 씬 카드.
+- **v0.1.13 추가**: 카메라 런타임 생명주기(`POST /scene/cameras`, `PATCH·DELETE /scene/cameras/:id`,
+  목록 `spawned` 필드) + 씬 스냅샷(`GET·POST /scene/snapshot`). 검증 하네스
+  `tools/scene-test/camera-snapshot-contract.mjs`(33개 항목).
+- **v0.1.12 추가**: 자기서술 `GET /scene`·`GET /scene/help`(text/markdown — 산문은 플러그인
+  `docs/scene-help.md` 파일, 무빌드 수정, 라이브 토큰 치환, 패키징은 Build.cs RuntimeDependencies).
+- **v0.1.11 추가**: 차량 배치 변형 `offset`(POST·PATCH·응답), PATCH `transform`(자유 좌표 재배치),
+  `slotId`+`transform` 동시 지정 `400`. 계약은 [배치 기준과 변형](#배치-기준과-변형-offset) 절.
+  이전에는 주차면 기준으로 비껴/틀어 세울 방법이 없어 자유 좌표로 빼내야 했고, 그러면 주차면 점유와
+  `carId` 조인이 끊겼다. JS 참조 구현·검증 하네스는 [tools/scene-test/](../tools/scene-test/).
 - **v0.1.8 추가**: 차종 `class` 라벨, 카메라 `projection`/`distortion`/`rollDeg`(핀홀 명시),
   `/scene/cars?visibility=` 가시성 GT, config 카메라 스포너(`+SpawnCameras`), Hucoms **연속 PTZ 미러**
   (`pt_control.cgi?action=setptmove`, `zf_control.cgi?action=setzfmove` — 방향+속도 velocity 제어,
