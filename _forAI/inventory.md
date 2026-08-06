@@ -38,7 +38,7 @@
 - `Config/` — 5개 파일: `DefaultEditor.ini`, `DefaultEngine.ini`(RHI·맵·게임모드·`[HTTPServer.Listeners]` + **`r.Lumen.HardwareRayTracing=True`** — 캡처 persist 가드와 짝, memo 「메모리 누수 원인과 대응」), `DefaultGame.ini`(플러그인 서브시스템 설정 + `[GeneralProjectSettings] ProjectVersion` = **앱 버전**, 현 **0.2.0**(배포 zip 이름의 출처 — `Scripts/package.ps1 -Zip`) + AssetManager **GameFeatureData 항목 bIsEditorOnly=True 필수** — memo 「반복 금지」), `DefaultGameUserSettings.ini`(배포 기본 960×540 일반 창모드 `FullscreenMode=2` + Epic 품질·`sg.ResolutionQuality=100`), `DefaultInput.ini`(창모드 고정을 위해 `bAltEnterTogglesFullscreen=False` / `bF11TogglesFullscreen=False`).
   - MCP 자동시작은 `Saved/Config/.../EditorPerProjectUserSettings.ini`(git 미추적). ⚠ 쿡 중 :8000 점유 프로세스가 있으면 쿡이 실패한다(memo 「반복 금지」).
 - `Scripts/` — `common.ps1`(.env 로더 + `Get-BaroSetting`/`Assert-BaroFile` 헬퍼), `build.ps1`, `run.ps1`, `package.ps1`.
-- `tools/scene-test/` — `/scene/*` 계약 검증 하네스(node, 의존성 0, 소비 저장소 무접촉): `offset-contract.mjs`(배치 변형 수치·동작), `camera-snapshot-contract.mjs`(카메라 생명주기·스냅샷 왕복 33항목), `jitter-demo.mjs`(offset A/B 데모 씬). 전부 실행 중 sim 필요.
+- `tools/scene-test/` — `/scene/*` 계약 검증 하네스(node, 의존성 0, 소비 저장소 무접촉): `offset-contract.mjs`(배치 변형 수치·동작), `camera-snapshot-contract.mjs`(카메라 생명주기·스냅샷 왕복 33항목), `lan-bind-contract.mjs`(리스너 LAN 바인딩 — **루프백 주소를 거부**하므로 배포 검증은 이걸로 한다: `--host <배포기IP>`), `jitter-demo.mjs`(offset A/B 데모 씬). 전부 실행 중 sim 필요.
 - `docs/` — `windows_build_run.md`(팀원 온보딩: 준비물·서브모듈·`.env`·빌드/실행·트러블슈팅), `scene-control-api.md`(`/scene/*` REST 레퍼런스 + 3D→2D 투영), `sangmyung_team_request.md`(상명대 에셋팀 협업 요청서), `outputs/`(생성 PDF, git 미추적).
 - `.env` / `.env.example` — PC별 로컬 설정. `UE_PATH`, `DEFAULT_MAP=/Game/simulator/LV_Park_sim_01`, `RUN_RESX=960`, `RUN_RESY=540`, `RUN_WINDOWED=true`, (옵션) `PACKAGED_EXE`. `.env`는 git 미추적 — `.env.example`을 복사해 쓴다.
 - `readme.md`(사람용 온보딩) / `_forAI/`(AI 작업 문맥).
@@ -98,7 +98,7 @@
   ```powershell
   Get-NetTCPConnection -State Listen -LocalPort 8081,8082,8091,8092,8095
   ```
-  제어 = `BaseHttpPort 8081`+카메라인덱스, MJPEG = `BaseMjpegPort 8091`+인덱스, 씬 제어 = 8095 고정. 제어 포트 8081~8084와 8095는 LAN 원격 제어를 위해 `[HTTPServer.Listeners]`에서 포트별 `BindAddress=any`.
+  제어 = `BaseHttpPort 8081`+카메라인덱스, MJPEG = `BaseMjpegPort 8091`+인덱스, 씬 제어 = 8095 고정. 제어 포트·씬 포트는 플러그인이 여는 지점에서 전 인터페이스로 선언하므로 ini 목록이 필요 없다(`memo.md` 「기본 설정값」).
 
 ## Tests
 

@@ -239,8 +239,10 @@ if ($Zip) {
         $sha = (& git -C $RepoPath rev-parse --short HEAD 2>$null)
         if ([string]::IsNullOrWhiteSpace($sha)) { return "(git 없음)" }
         # 서브모듈 포인터 변경(' m ')은 부모의 dirty 로 치지 않는다 — 별도 줄로 이미 기록된다.
+        # -cnotmatch(대소문자 구분) 필수: -notmatch 는 대소문자를 무시해 ' M '(워킹트리 수정)까지
+        # 함께 버린다. 그 탓에 더티 빌드가 clean 으로 표기됐다(2026-08-06 v0.2.5 패키징에서 발견).
         $dirty = (& git -C $RepoPath status --porcelain --untracked-files=no 2>$null) |
-            Where-Object { $_ -and $_ -notmatch '^ m ' }
+            Where-Object { $_ -and $_ -cnotmatch '^ m ' }
         if ($dirty) { return "$sha-dirty" }
         return $sha
     }

@@ -194,9 +194,10 @@ curl -s -o snap.jpg -w "%{size_download}\n" "http://$BOX:8083/cgi-bin/image/jpeg
     -H "content-type: application/json" \
     -d '{"cmd":"findstr","args":["/C:Hucoms"],"paths":["baro_unreal_sim/baro_unreal/Saved/Logs/baro_unreal.log"],"cwd":""}'
   ```
-- **로그의 `http://127.0.0.1:8095` 는 표시 문자열일 뿐**이다. 실제 바인딩은
-  `DefaultEngine.ini [HTTPServer.Listeners] +ListenerOverrides=(...BindAddress=any)` 를 따르므로
-  이 문자열만 보고 "로컬 전용"이라 단정하지 않는다(실측: 외부에서 정상 도달).
+- **시뮬 포트(Hucoms CGI·씬 제어)는 전 인터페이스(0.0.0.0)에 바인드된다.** 리스너를 여는 코드가
+  포트별로 그렇게 선언한다(플러그인 `HttpListenerBind.h`) — 런타임에 스폰한 카메라의 포트도 포함이다.
+  로그에 찍히는 주소 문자열이 아니라 **원격에서 실제로 응답하는지**로 판정한다.
+  판정 도구: `node tools/scene-test/lan-bind-contract.mjs --host <배포기IP>`.
 - **`/fc/exec` 는 짧은 명령용**이다(`EXEC_TIMEOUT_MS` 초과 시 SIGKILL, 환경변수 미상속, 출력 버퍼링).
   상주 프로세스는 반드시 pm2 통로로 다룬다.
 - **`pm2 kill`·일괄 `all` 은 라우트 자체가 없다.** DWarf 자신이 pm2 아래에 있어 함께 죽기 때문이다.

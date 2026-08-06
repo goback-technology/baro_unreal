@@ -106,8 +106,8 @@ ParkingSlotClassPrefix=BP_ParkingSlot
 ```
 
 - 스폰 카메라는 렌더 대상이 아니라 캡처 소스라 폴(메시) 없이 공중에 떠도 된다.
-- LAN 원격 제어가 필요하면 HTTP 포트를 `DefaultEngine.ini [HTTPServer.Listeners]` 오버라이드에 추가한다
-  (MJPEG 는 자체 0.0.0.0 이라 불필요).
+- HTTP 포트는 별도 설정 없이 전 인터페이스(`0.0.0.0`)에 열린다 — config 스포너든 런타임 스폰이든
+  같다. 특정 NIC 에 고정할 때만 `DefaultEngine.ini [HTTPServer.Listeners]` 에 포트를 명시한다.
 
 ## 엔드포인트 레퍼런스
 

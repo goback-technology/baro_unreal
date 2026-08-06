@@ -11,6 +11,61 @@
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
 
+- 2026-08-06 (2차): **앱 v0.2.5 / 플러그인 v0.1.14 — 포트를 여는 코드가 자기 LAN 노출을 선언한다. 위 결함 수정.**
+  - 수정: `FScopedHttpListenerOnAllInterfaces`(`HttpListenerBind.h/.cpp`) — 리스너를 만드는 동안만 그 포트의
+    `BindAddress=any` 오버라이드를 ini 캐시에 끼우고 원복한다. 적용 지점 2곳: `StartChannelServers`
+    (카메라 CGI, 부팅·런타임 공용)와 `USceneControlSubsystem::StartServer`(씬 8095).
+  - **엔진 함정 두 개를 실측으로 밟았다.** ① `[HTTPServer.Listeners]` 는 캐시라 GConfig 수정 뒤
+    `TSOnConfigSectionsChanged` broadcast 가 없으면 옛 값이 이긴다. ② 소켓은 `GetHttpRouter` 가 아니라
+    `StartListening()` 에서 열리는데, **모듈 비활성 상태에서 만든 리스너는 열기가 나중의 `StartAllListeners()`
+    로 미뤄진다** — 그래서 1차 수정 후에도 부팅 첫 리스너인 씬 8095 만 127.0.0.1 로 열렸다(카메라 포트는
+    그 시점엔 이미 활성이라 스코프 안에서 0.0.0.0 으로 바인드). 소멸자가 원복 **전에** `StartAllListeners()` 를
+    부르게 해서 덮었다. 진단 근거는 `Created new HttpListener on 127.0.0.1:8095` 와 `Starting all listeners...`
+    의 로그 순서다.
+  - ini 는 포트 목록을 지웠다 — 목록 방식이 런타임 포트를 담을 수 없다는 게 이 결함의 뿌리라 두 진실을
+    남기지 않았다. 사람이 명시한 포트는 코드가 존중한다(NIC 고정용).
+  - 검증(standalone `-game`, 로컬 PC 192.168.0.211): 전 리스너 `0.0.0.0`(8081~8086·8095·스폰 8287),
+    **루프백이 아닌 주소로** 스폰 카메라 CGI 응답(tiltpos 3000)·스냅샷 1.06MB, 삭제 후 포트 닫힘.
+    회귀: `camera-snapshot-contract.mjs` 33개 + `offset-contract.mjs` 전부 통과. 종료 후 `Saved/Config`
+    오염 0(원복이 실제로 동작).
+  - **신규 회귀 가드 `tools/scene-test/lan-bind-contract.mjs`** — 루프백 주소를 거부하고 비루프백으로만
+    접속한다. 기존 계약 테스트 33개가 이 결함을 전부 통과시킨 이유가 localhost 였기 때문이라, 같은 함정을
+    다시 안 밟으려면 이 테스트를 배포 검증에 넣어야 한다(`--host <배포기IP>`).
+  - **배포까지 완료(같은 날)**: `package.ps1 -Config Development -Zip` → `baro_unreal_sim_v0.2.5_20260806.zip`
+    (2.98GB) → DWarf 청크 업로드 36청크 280초(10.8MB/s) → `tar -x` 7.3초 → pm2 restart + save.
+    배포기(192.168.0.22)에서 `pluginVersion 0.1.14`·카메라 6대·8083 실렌더 1.2MB 확인.
+    **본 판정: `lan-bind-contract.mjs --host 192.168.0.22` 전 항목 통과** — 30분 전 같은 호출이
+    타임아웃이던 스폰 카메라 CGI(:8287)가 원격에서 응답한다. 교체 전 기준선도 같은 방식으로 재현해 뒀다
+    (v0.2.4: 스폰 200 + CGI 원격 도달 불가).
+    ini 포트 목록을 지운 뒤였으므로 이 통과는 **패키지 빌드에서도 코드 경로가 동작함**을 함께 증명한다.
+  - **부수 발견·수정: `package.ps1` 이 더티 빌드를 clean 으로 표기하고 있었다.** PowerShell `-notmatch` 는
+    대소문자를 무시해, 서브모듈 포인터(`' m '`) 필터가 워킹트리 수정(`' M '`) 줄까지 전부 버렸다.
+    `-cnotmatch` 로 고쳤고, 이번 zip 의 `.info.txt` 는 `4e40276-dirty` / `58b7835-dirty` 로 정정했다.
+  - **미수행: 커밋·push·서브모듈 핀 갱신**(이교수님이 직접). 배포본은 커밋 전 워킹트리로 구운 것이라
+    `.info.txt` 가 `-dirty` 다 — 커밋 후 재현하려면 그 커밋으로 다시 구워야 한다.
+    배포기의 옛 zip `baro_unreal_sim_v0.2.4_20260806.zip`(2.98GB)은 지우지 않고 남겨 뒀다.
+- 2026-08-06: **런타임 스폰 카메라의 CGI 가 원격에서 안 열린다 — 원인은 스폰 코드가 아니라 포트별 바인드 주소.**
+  - 접수(소비자 세션, baro_calory 쪽): `POST /scene/cameras` 로 만든 카메라가 MJPEG(:8297)은 열리는데
+    CGI(:8287)는 연결 거부. 포트쌍 8287/8297·8087/8097 **두 번 모두 동일**(포트 대역 문제 아님), 기존
+    6대(8081~8086)는 정상. 보고자 가설은 "스폰 경로가 MJPEG 만 띄우고 CGI 서버를 안 띄운다".
+  - **그 가설은 소스와 맞지 않는다.** `SpawnCameraRuntime` 은 부팅 경로와 같은 `StartChannelServers` 를
+    호출하고, 그 함수는 라우터 획득(`GetHttpRouter(..., bFailOnBindFailure=true)`) → CGI 라우트 8개 바인드 →
+    **그다음** MJPEG 순서다. 라우터가 없으면 스폰 자체가 실패(액터 파괴 + 에러)한다. 즉 **200 + MJPEG 개방은
+    CGI 라우터가 이미 살아 있었다는 증거**다.
+  - 진짜 원인 = **바인드 주소**. UE 5.8 `FHttpServerListenerConfig::BindAddress` 기본값이 `"localhost"` 이고,
+    LAN 노출은 `DefaultEngine.ini [HTTPServer.Listeners] +ListenerOverrides=(Port=N,BindAddress=any)` 로
+    **포트별로만** 열린다(우리 ini 등재: 8081~8086·8095 — 전역 `any` 를 안 쓰는 건 에디터 MCP :8000 노출 때문).
+    런타임 스폰 포트는 부팅 시점 ini 에 있을 수 없으므로 127.0.0.1 에만 바인드된다 → 원격 거부. MJPEG 은
+    플러그인 자체 `FTcpListener` 라 항상 0.0.0.0 → **한쪽만 열리는 비대칭이 그대로 설명된다.** 시도한 두 포트가
+    둘 다 미등재라 포트쌍 교체가 판별력을 못 가졌다.
+  - v0.1.13 계약 테스트 33개(`tools/scene-test/camera-snapshot-contract.mjs`)가 못 잡은 이유: **같은 호스트에서
+    돌렸다.** 스폰 즉시 CGI 응답을 실제로 확인했지만 그건 localhost 응답이었다 — 원격 소비가 전제인 기능은
+    회귀도 원격에서 걸어야 한다.
+  - 남은 실기 확인(1분): sim 호스트에서 `netstat -ano | findstr :<스폰포트>` 가 `127.0.0.1:<port>` 인지.
+    소스상으로는 확정이지만 실측으로 못 박아 두는 편이 낫다.
+  - **이번 세션은 문서화만 — 코드·ini 무변경.** 수정안 2가지(플러그인에서 GConfig 런타임 주입 / ini 대역 예약)와
+    검증 절차는 `plan.md` 「능동 작업」 첫 항목, 상시 규칙은 `memo.md` 「기본 설정값」에 넣었다.
+    소비자 판단은 "급하지 않음"(기존 카메라 시연은 무영향).
 - 2026-08-03 (3차): **플러그인 v0.1.13 — 카메라 런타임 API + 씬 스냅샷. BEV 자율 파인튜닝 루프 대비.**
   - 이교수님 방향: BEV(object3d)류를 에이전트가 자율 파인튜닝하는 기능 — 과거(카메라 고정 config
     스포너)의 데이터 다양성 한계를 풀려면 카메라 스폰/이동/삭제와 씬 저장/복원이 RPC 로 필요.

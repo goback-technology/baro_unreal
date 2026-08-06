@@ -22,6 +22,19 @@
 - MCP 서버(에디터 내장): `http://127.0.0.1:8000/mcp`, `bAutoStartServer=True`
 - **포트(카메라 인덱스만큼 자동 부여)**: HTTP CGI = `BaseHttpPort` **8081**+i, 연속 MJPEG TCP = `BaseMjpegPort` **8091**+i. 씬 제어는 **8095** 고정. baro_calory `config.json devices[].port/mjpegPort`와 1:1.
   - **카메라 수는 맵마다 다르다** — 기본 맵 `LV_Park_sim_01` = 2대(8081·8082 / 8091·8092), `sim_02` = 2대, `sim_03` = 4대(8081~8084 / 8091~8094). `DefaultEngine.ini [HTTPServer.Listeners]`가 8081~8084를 미리 예약(상한 슈퍼셋)해 둔 것이지 항상 4포트가 열린다는 뜻이 아니다.
+- **CGI·씬 포트의 LAN 노출은 리스너를 여는 코드가 선언한다**(플러그인 `HttpListenerBind.h`, v0.1.14~).
+  UE `FHttpServerListenerConfig::BindAddress` 기본값이 `localhost` 라 아무 선언이 없으면 127.0.0.1 에만
+  바인드된다. ini 포트 목록 방식은 **런타임 스폰 포트를 담을 수 없어** 폐기했다(2026-08-06 결함).
+  `DefaultEngine.ini [HTTPServer.Listeners]` 에 포트를 명시하면 코드가 그 값을 존중한다(NIC 고정용).
+  전역 `DefaultBindAddress=any` 는 여전히 금지 — 같은 모듈인 에디터 MCP(:8000)까지 LAN 에 노출된다.
+  MJPEG(8091+)는 플러그인 자체 `FTcpListener` 라 항상 0.0.0.0.
+  구현이 알고 있어야 하는 엔진 사실 둘: ① `[HTTPServer.Listeners]` 는 캐시되므로 GConfig 수정 뒤
+  `FCoreDelegates::TSOnConfigSectionsChanged` broadcast 가 없으면 조용히 옛 값이 이긴다.
+  ② 소켓은 `GetHttpRouter` 가 아니라 `StartListening()` 에서 열리고, 모듈 비활성 상태에서 만든 리스너는
+  열기가 나중의 `StartAllListeners()` 로 **미뤄진다**(부팅 첫 리스너 — 실측: 8095 가 그래서 localhost 였다).
+  → **"MJPEG 은 되는데 CGI 만 원격에서 연결 거부"** 면 라우터·라우트가 아니라 바인드 주소를 의심한다.
+  로그는 정상으로 보이고 **localhost 테스트로는 절대 재현되지 않는다**. 판별·회귀는
+  `node tools/scene-test/lan-bind-contract.mjs`(루프백 거부) 또는 `netstat -ano | findstr :<port>`.
 - **스트림**: `StreamFps=30`(DefaultGame.ini 오버라이드 — 코드 기본 15), 1280×720 q80. **스냅샷**: QHD 2560×1440 q92, 워밍업 0.
 - **톤**: 노출 -0.7 + **대비 1.2**(DefaultGame.ini `CaptureContrast` — 코드 기본 1.6은 흰 차+직사광에서 "탄" 세피아, 2026-07-02 실측 개정). 라이브 스윕은 `/api/capture-tuning`.
 - **표준 실행**: `./Scripts/run.ps1`(기본 `-Mode Game`) — `.env`의 `UE_PATH`/`DEFAULT_MAP`/`RUN_RESX`/`RUN_RESY`를 읽어 standalone `UnrealEditor.exe <uproject> -game -windowed -ResX=960 -ResY=540`을 띄운다. `GameDefaultMap=/Game/simulator/LV_Park_sim_01`, `GlobalDefaultGameMode=/Script/baro_unreal.BaroUnrealGameMode`(앱 게임모드 — 플러그인 `ABaroSimGameMode` 상속, HUD만 앱 것으로 교체. 구체 폰 없음·월드 렌더 OFF·커서 표시·**ESC 종료**). 완전 무창은 `-RenderOffscreen -log`(-nullrhi 금지 — SceneCapture가 못 돎).
@@ -49,7 +62,7 @@
 - **연속 PTZ velocity 미러**(v0.1.8): `pt_control.cgi?action=setptmove`(pan/tilt=right|left|up|down|stop + speed), `zf_control.cgi?action=setzfmove`(zoom=in|out|stop). 채널에 `PanVel/TiltVel/ZoomVel`(native units/sec), Tick에서 Cur 적분+Tgt 동기, 한계 클램프 시 자동정지. goptzfpos/setcenter(절대 이동)가 velocity를 0으로 리셋(goto가 jog 취소). bFixed는 무시. 성공=빈 본문. baro_calory `fake-camera-client.setPtMove/setZfMove`도 동일 부호로 미러(부호 회귀 방지 테스트 포함).
 - **SceneCapture 전용 렌더 3중 함정**(캡처가 안 보이거나 뭉개지면 이 순서로 의심): ① 텍스처 스트리머 뷰 미등록(AddViewInformation) ② 폴리지 LOD 줌 보정(LODDistanceFactor) ③ **VT 페이지 스로틀**(`bOverrideVirtualTextureThrottle=true` — 주차라인 데칼 사건 2026-07-10, dev_log 참조).
 - **플러그인은 "최소한의 카메라" — 앱 고유 기능을 넣지 않는다.** HUD·버전 표기·서빙 주소처럼 이 앱에만 필요한 것은 호스트 게임 모듈(`Source/baro_unreal/`)에서 상속으로 해결한다. 플러그인 클래스는 전부 `BAROCCTVSIMULATOR_API` export이고 `DrawHUD()`가 virtual, `ABaroSimGameMode` 생성자가 public이라 `HUDClass` 교체만으로 충분하다. 플러그인 `Build.cs`의 `Sockets`/`Networking`/`Projects`는 Private 의존이라 전이되지 않으니 게임 `Build.cs`에 직접 추가한다. (근거: 3프로젝트 공용 서브모듈 → 한 줄 수정도 버전 범프·풀 리빌드·push·서브모듈 갱신 사슬.)
-- **제어 API 무인증은 의도된 결정**: 씬 제어(8095)와 Hucoms CGI(8081~8084)는 토큰·API키·origin 검사가 없고 `DefaultEngine.ini [HTTPServer.Listeners]`에서 포트별 `BindAddress=any`로 LAN에 열어 둔다. 이 시뮬레이터는 **개발 보조용이며 내부망 전용**이므로 인증을 두지 않는다(2026-07-10 확정). 입력 하드닝은 값 클램핑(차종·색·번호판 정규화)까지가 범위다. MCP(8000)는 override를 주지 않아 localhost로 남는다 — 여기에 `BindAddress=any`를 추가하지 말 것.
+- **제어 API 무인증은 의도된 결정**: 씬 제어(8095)와 Hucoms CGI(카메라별 포트)는 토큰·API키·origin 검사가 없고 전 인터페이스에 열려 있다(플러그인이 포트를 여는 지점에서 선언 — 위 「기본 설정값」). 이 시뮬레이터는 **개발 보조용이며 내부망 전용**이므로 인증을 두지 않는다(2026-07-10 확정). 입력 하드닝은 값 클램핑(차종·색·번호판 정규화)까지가 범위다. MCP(8000)는 플러그인이 여는 포트가 아니므로 엔진 기본값대로 localhost로 남는다 — 전역 `DefaultBindAddress=any`로 이걸 깨지 말 것.
 
 ## 반복 금지
 
