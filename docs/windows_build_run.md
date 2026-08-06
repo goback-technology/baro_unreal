@@ -252,6 +252,12 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 같은 이름이 이미 있으면 실패한다(이미 전달한 산출물 보호). 덮어쓰려면 `-Force`를 붙인다.
 
+zip 루트에는 `docs/deploy-readme.md`가 **`README.md`로 함께 실린다** — 배포기에서 이 시뮬을 쓰는
+에이전트가 읽는 안내다. 플러그인의 `docs/scene-help.md`(런타임 `GET /scene/help`가 서빙하는 원문)도
+pak 밖 루즈 파일로 스테이징되므로, 배포 후 그 파일만 고쳐도 리빌드 없이 반영된다.
+
+만든 zip을 배포기에 올려 실행하는 절차는 [deploy-dwarf.md](deploy-dwarf.md)에 있다.
+
 ## 실행 확인
 
 에디터 Play, standalone, 패키지 실행 중 하나를 켠 뒤 확인한다.
