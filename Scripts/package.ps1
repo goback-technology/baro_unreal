@@ -190,6 +190,16 @@ if ($Zip) {
         Remove-Item -LiteralPath $savedInArchive -Recurse -Force
     }
 
+    # 에이전트용 배포 README 를 zip 루트에 싣는다 (시뮬 전체 기능 조망 → /scene/help 자기서술 진입점).
+    # includeBaseDirectory=$false 라 $Archive 바로 아래 둔 파일이 zip 루트로 온다.
+    $deployReadmeSrc = Join-Path $Root "docs\deploy-readme.md"
+    if (Test-Path -LiteralPath $deployReadmeSrc) {
+        Copy-Item -LiteralPath $deployReadmeSrc -Destination (Join-Path $Archive "README.md") -Force
+        Write-Host " 배포 README 포함: README.md (zip 루트)" -ForegroundColor Yellow
+    } else {
+        Write-Host (" 경고: 배포 README 원본 없음 — README 없이 진행: {0}" -f $deployReadmeSrc) -ForegroundColor Yellow
+    }
+
     Write-Host (" 압축 중: {0}" -f $zipName) -ForegroundColor Cyan
     Write-Host " (3GB+ 라 수 분 걸립니다)"
     Add-Type -AssemblyName System.IO.Compression.FileSystem
