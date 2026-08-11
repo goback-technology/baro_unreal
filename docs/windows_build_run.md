@@ -150,11 +150,12 @@ Visual Studio로 빌드해도 된다.
 4. 상단 **Play** 버튼을 누른다.
 
 Play를 누르면 레벨에 배치된 CCTV 카메라 수만큼 Hucoms 서버가 열린다.
-레벨 카메라는 HTTP `8081`부터, MJPEG `8091`부터 사용한다(현재 데모 레벨은 2대 → `8081`/`8082`, `8091`/`8092`).
+데모 레벨 `LV_Park_sim_01` 에는 저작된 카메라가 없어 **0 대로 시작한다.** 카메라는 씬 제어
+API(`8095`, `POST /scene/cameras`)로 스폰하고, 그때 지정한 포트의 CGI·MJPEG 가 함께 열린다.
+포트를 비우면 HTTP `8081`, MJPEG `8091` 부터 순서대로 자동 부여된다.
 
-여기에 더해 `Config\DefaultGame.ini` 의 `+SpawnCameras=(...)`(config 스포너, 플러그인 v0.1.8부터)로
-높이별 카메라 4대가 추가로 스폰된다 — HTTP `8083`~`8086`, MJPEG `8193`~`8196`.
-레벨을 열지 않고 ini 한 줄로 위치·높이·틸트를 바꿀 수 있다. Scene 제어 API 는 `8095`(`ScenePort`)다.
+부팅 때부터 고정 배치가 필요하면 `Config\DefaultGame.ini` 의 `+SpawnCameras=(...)`(config 스포너,
+플러그인 v0.1.8부터)로 레벨을 열지 않고 배치할 수 있다 — 기본값은 비어 있다.
 
 ## CCTV 서버처럼 실행
 
@@ -265,7 +266,7 @@ pak 밖 루즈 파일로 스테이징되므로, 배포 후 그 파일만 고쳐�
 포트가 열렸는지 확인:
 
 ```powershell
-Get-NetTCPConnection -State Listen -LocalPort 8081,8082,8083,8084,8085,8086,8091,8092,8193,8194,8195,8196,8095
+Get-NetTCPConnection -State Listen -LocalPort 8095   # 씬 제어. 카메라 포트는 스폰한 뒤에야 열린다
 ```
 
 PTZ 상태 응답 확인:

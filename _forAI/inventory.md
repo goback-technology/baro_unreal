@@ -112,4 +112,4 @@
 ## Notes
 
 - 라인엔딩: `.gitattributes`가 `* text=auto`(저장소 LF / 체크아웃 CRLF)로 정규화하고 `*.uasset`·`*.umap`·이미지류는 binary 선언. Git LFS 도입 지점은 주석으로 예약돼 있으나 code-only 전략상 미적용.
-- 인증 없음: 씬 제어(8095)·Hucoms CGI(8081~8084)는 토큰/API키가 없고 LAN에 열려 있다. **내부망 개발 보조 전용**이라는 의도된 결정이다(`memo.md`).
+- 인증 없음: 씬 제어(8095)·스폰한 카메라의 Hucoms CGI 는 토큰/API키가 없고 LAN에 열려 있다. **내부망 개발 보조 전용**이라는 의도된 결정이다(`memo.md`).

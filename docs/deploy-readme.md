@@ -79,8 +79,9 @@ curl http://$BOX:8095/scene/cameras   # 카메라 목록 + 각자의 hucomsPort�
 ## 3. 포트 맵
 
 - **씬 제어: `8095`** (`/scene/*`)
-- **카메라 CGI: `8081`부터**(카메라 인덱스 순). 높이별 카메라 8/12/16/20 m = **`8083`~`8086`**
-- **연속 MJPEG: `8091`부터**. 높이별 = **`8193`~`8196`**
+- **카메라는 0 대로 시작한다** — 그래서 열려 있는 카메라 포트도 없다. `POST /scene/cameras` 로
+  포트를 명시해 스폰하면 그때 그 포트의 CGI·MJPEG 가 살아나고, `DELETE` 하면 함께 닫힌다.
+- 자동 부여를 쓰면 **카메라 CGI 는 `8081`부터, 연속 MJPEG 는 `8091`부터** 순서대로 나간다.
 - 포트를 하드코딩하지 말고 항상 `/scene/cameras` 로 실제 포트를 조인하라.
 
 ## 4. 좌표·단위 규약 (라벨 만들 때 필수)
@@ -122,8 +123,13 @@ curl $P/scene/slots                      # 주차면 id 목록
 curl -X POST $P/scene/cars -H "content-type: application/json" \
   -d '{"slotId":"<slots 의 id>","carType":3,"color":4,
        "offset":{"location":{"x":-16,"y":12},"rotation":{"yaw":7}}}'
-curl "$P/scene/cars?visibility=8083"     # 8083 카메라 기준 차량별 가림 정답
-curl -o snap.jpg "http://$BOX:8083/cgi-bin/image/jpeg.cgi"   # 그 카메라 실렌더 스냅샷
+# 카메라는 0 대로 시작하니 먼저 하나 세운다(포트는 명시 필수)
+curl -X POST $P/scene/cameras -H "content-type: application/json" \
+  -d '{"location":{"x":73,"y":-2015,"z":1000},"yawDeg":90,"pitchDeg":-30,
+       "httpPort":8287,"mjpegPort":8297}'
+curl "$P/scene/cars?visibility=8287"     # 그 카메라 기준 차량별 가림 정답
+curl -o snap.jpg "http://$BOX:8287/cgi-bin/image/jpeg.cgi"   # 그 카메라 실렌더 스냅샷
+curl -X DELETE "$P/scene/cameras/8287"   # 카메라 제거(그 포트도 닫힌다)
 curl -X POST $P/scene/reset              # 전부 정리
 ```
 

@@ -165,8 +165,12 @@ UE 부팅(맵 로드·Lumen 셋업)에 시간이 걸리니 기동 직후 실패�
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" "http://$BOX:8095/scene/help"    # 200
 curl -s "http://$BOX:8095/scene/catalog"                                   # pluginVersion 확인
-curl -s "http://$BOX:8095/scene/cameras"                                   # 카메라 6대·포트
-curl -s -o snap.jpg -w "%{size_download}\n" "http://$BOX:8083/cgi-bin/image/jpeg.cgi"   # 실렌더
+curl -s "http://$BOX:8095/scene/cameras"                                   # 시작 시 빈 목록
+# 렌더까지 보려면 카메라를 하나 세웠다 지운다(포트 명시 필수)
+curl -s -X POST "http://$BOX:8095/scene/cameras" -H "content-type: application/json" \
+  -d '{"location":{"x":73,"y":-2015,"z":1000},"yawDeg":90,"pitchDeg":-30,"httpPort":8287,"mjpegPort":8297}'
+curl -s -o snap.jpg -w "%{size_download}\n" "http://$BOX:8287/cgi-bin/image/jpeg.cgi"   # 실렌더
+curl -s -X DELETE "http://$BOX:8095/scene/cameras/8287"
 ```
 
 기능까지 확인하려면 차량을 하나 스폰해 보고 지운다(`POST /scene/cars` → `POST /scene/reset`).
