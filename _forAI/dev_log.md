@@ -11,6 +11,24 @@
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
 
+- 2026-08-12: **플러그인 v0.1.15 — 카메라 별명(Note)이 액터에 산다. 앱 0.2.8 배포·복원 검증.**
+  - **왜**: 스폰 스펙의 `Note` 를 `SetActorLabel` 로만 흘렸는데 액터 라벨은 **에디터 전용**이라
+    패키지에서는 남지 않았다 — 이름이 저장되지도, API 로 되읽히지도 않았다. 커미셔닝 콘솔이
+    "카메라 이름"의 정본을 씬에 두기로 하면서(`camera.note` 가 이름, 웹은 사본을 안 든다) 이
+    구멍이 실사용을 막았다.
+  - **무엇**: `APTZCamera.Note`(UPROPERTY, `PTZ|Identity`) 신설 — 식별자가 아니라 별명(빈 값·중복
+    허용, 식별은 액터 이름과 hucomsPort). 스폰(config·API) 시 기록, `GET /scene/cameras` 에
+    `note` 실림, 스냅샷 저장·복원이 별명을 왕복, `PATCH /scene/cameras/:id` 가 `note` 를 받는다.
+    **note 만 바꾸는 PATCH 는 레벨 저작 카메라도 허용** — 옮기지 못하는 것은 자세가 레벨의
+    것이어서지, 이름까지 레벨의 것이어서가 아니다. `docs/scene-help.md` 동반 갱신.
+  - **소비자**(참고): `baro_calory` 백엔드가 note 로 기기 이름을 파생하고(sim-devices), 평면도의
+    설치/컨트롤 분리·rebase·hfovDeg 지시가 이 씬 계약(mount.baseYaw·PATCH yawDeg/pitchDeg·
+    intrinsics.zoomHfov) 위에서 돈다 — 플러그인 쪽 추가 수정은 필요 없었다(FK 액터 구성 그대로).
+  - **배포**: 앱 `ProjectVersion 0.2.8` 로 DWarf 재배포(절차 정본 docs/deploy-dwarf.md).
+    **절차에 0번이 생겼다**: 배포 전 `GET /scene/snapshot` 을 파일로 받아 두고, 기동 뒤 복원 —
+    2026-08-11 이 순서를 뒤집어 런타임 카메라 두 대를 잃었다(스냅샷 `_localfiles/deploy/`).
+    검증: 라이브 `pluginVersion 0.1.15`, note 왕복(스폰→이름변경→스냅샷→복원) 정상.
+
 - 2026-08-11: **`LV_Park_sim_01` — 한 열이 2.49° 돌아가 있었다. 폈다(저장 완료).**
   - **발견 경로가 웹 UI 였다.** 커미셔닝 콘솔의 평면도에서 주차면이 계단처럼 밀려 보인다는 지적 →
     `/scene/slots` 를 그룹별로 재 보니 여덟 면이 전부 `yaw −87.507607`, 그 열이 실제로 뻗은 방향도

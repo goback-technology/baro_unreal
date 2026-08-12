@@ -180,10 +180,14 @@ curl -s -X DELETE "http://$BOX:8095/scene/cameras/8287"
 
 폴더명이 고정이라 pm2 등록은 그대로 두고 내용만 갈아끼운다.
 
+0. **`GET /scene/snapshot` 을 먼저 받아 파일로 남긴다.** 런타임에 세운 카메라와 배치한 차량은 시뮬
+   프로세스 안에만 산다 — 다음 단계의 `pm2 stop` 이 곧 삭제다. 서버는 스냅샷을 보관하지 않으므로
+   받아 두지 않으면 되돌릴 것이 없다. 2026-08-11 이 순서를 뒤집어 카메라 두 대를 잃었다.
 1. `POST /api/v1/pm2/stop` `{"name":"baro_unreal"}` — 실행 중이면 파일이 잠겨 덮어쓰기가 실패한다.
 2. 새 zip 청크 업로드 → `tar -x`(기존 파일 덮어씀).
 3. `POST /api/v1/pm2/restart` `{"name":"baro_unreal"}` (또는 `start`).
-4. [검증](#6-검증) 반복. 옛 zip 은 `POST /fc/delete` 로 지워 디스크를 회수한다.
+4. 기동 뒤 **0번 스냅샷을 `POST /scene/snapshot` 으로 되돌린다** — 카메라·차량이 돌아온다.
+5. [검증](#6-검증) 반복. 옛 zip 은 `POST /fc/delete` 로 지워 디스크를 회수한다.
 
 ## 함정 — 실측으로 확인된 것
 
