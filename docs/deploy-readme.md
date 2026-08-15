@@ -1,10 +1,11 @@
 # baro_unreal CCTV 시뮬레이터 — 배포본 안내 (에이전트용)
 
-> 앱 v0.2.4 · 플러그인 baroCCTVSimulator v0.1.13 · Windows/Win64 · 헤드리스
+> 플러그인 baroCCTVSimulator v0.1.16 기준 · Windows/Win64 · 헤드리스 (정확한 버전은 `/scene/catalog`)
 >
 > 이 파일은 배포 zip 루트에 실린다. **에이전트가 이 시뮬을 100% 활용해 작업을 스스로 계획·실행**하도록
 > 전체 기능을 한 장으로 조망한다. 필드 단위의 최신 계약은 런타임 자기서술 API **`GET :8095/scene/help`**
 > 가 항상 최신으로 준다 — 이 README 는 그 위의 지도이고, **먼저 `/scene/help` 를 읽는 것이 부트스트랩이다.**
+> (씬 포트 기본 8095 — 인스턴스를 `-ScenePort=N` 으로 띄웠다면 N. 아래 「포트 맵」의 기동 계약 참조.)
 
 ## 목차
 
@@ -78,11 +79,28 @@ curl http://$BOX:8095/scene/cameras   # 카메라 목록 + 각자의 hucomsPort�
 
 ## 3. 포트 맵
 
-- **씬 제어: `8095`** (`/scene/*`)
+- **씬 제어: 기본 `8095`** (`/scene/*`) — 기동 시 `-ScenePort=N` 으로 바꿀 수 있다(아래 기동 계약).
 - **카메라는 0 대로 시작한다** — 그래서 열려 있는 카메라 포트도 없다. `POST /scene/cameras` 로
-  포트를 명시해 스폰하면 그때 그 포트의 CGI·MJPEG 가 살아나고, `DELETE` 하면 함께 닫힌다.
+  포트를 명시해 스폰하면 그때 그 포트의 CGI·MJPEG 가 살아난다. `DELETE` 하면 응답은 중단되지만
+  **CGI HTTP 포트의 리스너는 프로세스 종료까지 리슨 상태로 남는다**(UE 엔진 제약) — 같은 인스턴스는
+  그 포트를 재사용할 수 있지만 **다른 인스턴스·프로세스는 쓸 수 없다.**
 - 자동 부여를 쓰면 **카메라 CGI 는 `8081`부터, 연속 MJPEG 는 `8091`부터** 순서대로 나간다.
 - 포트를 하드코딩하지 말고 항상 `/scene/cameras` 로 실제 포트를 조인하라.
+
+### 인스턴스 기동 계약 — 운용 에이전트용 (v0.1.16~, 다중 실행)
+
+시뮬 인스턴스의 기동·포트 부여·헬스체크·재시작은 **운용 에이전트가 관리**한다. 자동 포트 탐색은 없다.
+
+- **포트 결정 순서**: 커맨드라인 `-ScenePort=8096`(카메라 자동부여 시작값도 `-BaseHttpPort=` /
+  `-BaseMjpegPort=`) → 없으면 ini 기본값(8095/8081/8091). Shipping 포함 전 빌드 구성에서 동작.
+- **충돌 = 즉시 종료**: 지정한 `ScenePort` 가 이미 점유돼 있으면 인스턴스는 에러 로그를 남기고 스스로
+  종료한다. 따라서 **프로세스가 살아 있으면 포트는 보장된다** — 엉뚱한 포트·localhost 반쪽 기동 같은
+  제3의 상태는 없다.
+- **운용 사이클**: 기동 `baro_unreal.exe -ScenePort=N` → 준비 확인 `GET :N/scene/catalog` 200 →
+  실패/종료 감지 = 프로세스 exit.
+- **다중 인스턴스 규칙**: 인스턴스마다 `ScenePort` 와 **카메라 포트 블록을 전부 분리**할 것(위 DELETE
+  리스너 존속 제약 때문에 블록 간 재사용 불가). 로그·설정 분리가 필요하면 인스턴스별 `-UserDir=<경로>`.
+- **자원 계획**(실측): 인스턴스당 유휴 RAM 4.0GB / VRAM 2.2GB — 8GB GPU 기기는 **2개가 실용 한도**.
 
 ## 4. 좌표·단위 규약 (라벨 만들 때 필수)
 
@@ -129,7 +147,7 @@ curl -X POST $P/scene/cameras -H "content-type: application/json" \
        "httpPort":8287,"mjpegPort":8297}'
 curl "$P/scene/cars?visibility=8287"     # 그 카메라 기준 차량별 가림 정답
 curl -o snap.jpg "http://$BOX:8287/cgi-bin/image/jpeg.cgi"   # 그 카메라 실렌더 스냅샷
-curl -X DELETE "$P/scene/cameras/8287"   # 카메라 제거(그 포트도 닫힌다)
+curl -X DELETE "$P/scene/cameras/8287"   # 카메라 제거(응답 중단 — 단 CGI 리스너는 프로세스 종료까지 남는다)
 curl -X POST $P/scene/reset              # 전부 정리
 ```
 
@@ -138,6 +156,7 @@ curl -X POST $P/scene/reset              # 전부 정리
 ## 8. 런타임·배포 메모
 
 - 실행: pm2 앱 `baro_unreal`. 상태 `pm2 jlist`, 재시작 `pm2 restart baro_unreal`.
+  다중 인스턴스는 pm2 앱 이름과 `-ScenePort`(필요시 `-UserDir`)를 인스턴스별로 달리 해서 등록한다.
 - 이 빌드는 **Development** 라 로그/콘솔이 열려 있다(오류·안정성 분석용).
 - 이 README 와 `/scene/help` 원문(`baro_unreal/Plugins/baroCCTVSimulator/docs/scene-help.md`)은 pak 밖
   **루즈 파일**이라, 배포기에서 직접 고치면 리빌드 없이 즉시 반영된다.
