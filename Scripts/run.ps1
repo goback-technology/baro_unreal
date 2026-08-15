@@ -19,6 +19,7 @@ param(
     [string]$Map = "",
     [int]$ResX = 0,
     [int]$ResY = 0,
+    [int]$ScenePort = 0,
     [switch]$Fullscreen,
     [switch]$Log,
     [switch]$WaitForExit,
@@ -67,6 +68,12 @@ if ($windowed) {
 
 if ($Log) {
     $args += "-log"
+}
+
+# 씬 제어 포트 지정(플러그인 v0.1.16~ 커맨드라인 스위치 — 다중 인스턴스 분리용).
+# Base 포트(-BaseHttpPort/-BaseMjpegPort)가 필요하면 -ExtraArgs 로 넘긴다.
+if ($ScenePort -gt 0) {
+    $args += "-ScenePort=$ScenePort"
 }
 
 if ($ExtraArgs.Count -gt 0) {
