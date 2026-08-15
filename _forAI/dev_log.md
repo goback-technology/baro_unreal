@@ -11,6 +11,58 @@
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
 
+- 2026-08-15: **플러그인 v0.1.16 — 포트 커맨드라인 스위치 3종(`-ScenePort`/`-BaseHttpPort`/`-BaseMjpegPort`). ScenePort 점유는 즉시 종료.**
+  - **왜**: 아래 엔트리(같은 날)의 실측으로 Shipping 에서 포트를 지정할 방법이 없음이 확인됐다.
+    A안(프로세스 분리) 운영의 전제라 이교수님 결정으로 구현(스위치 셋 다 + 충돌 시 즉시 종료).
+  - **무엇**: 서버 시작 직전 `FParse::Value(FCommandLine::Get(), ...)` — `SceneControlSubsystem::StartServer`
+    진입부(ScenePort, 사용처 7곳 자동 일관), `HucomsServerSubsystem::StartServers` 의 `BuildChannels` 직전
+    (Base 2종, 명시 포트 카메라 우선 규칙 유지). config 로드 이후라 **커맨드라인 > `-ini:` > ini** 자연 성립.
+    `run.ps1 -ScenePort N` 편의 파라미터, DefaultGame.ini 의 틀린 주석("패키징 빌드 포함") 정정.
+  - **fail-fast 는 프로브로 구현했다 — `bFailOnBindFailure` 는 부팅 첫 리스너에서 헛돈다(신규 실측)**:
+    소켓 바인드가 `StartAllListeners()` 로 미뤄져 포트가 점유돼 있어도 라우터가 "유효"하게 돌아오고
+    "서버 시작" 로그까지 정상으로 찍힌다(1차 구현이 이걸로 헛돌아 스플릿-브레인 재현됨). 그래서
+    라우터 생성 전에 원시 소켓(`FTcpSocketBuilder`) 으로 0.0.0.0 선점 프로브 → 실패 시 Error 로그 +
+    `RequestEngineExit`. 재검증: 점유 포트로 띄운 3번째 인스턴스가 스스로 종료, localhost 폴백 리스너 0.
+  - **검증**(에디터 `-game`, Development): 8095+8096 동시 기동(각각 0.0.0.0) · 우선순위(스위치 8096 이
+    `-ini:` 8097 과 config 8095 를 이김 — 로그로 증명) · Base 2종 파싱 로그 · 충돌 즉시 종료 ·
+    `camera-snapshot-contract`(8095: 32/33) · `lan-bind-contract`(LAN 핵심 전부 OK).
+  - **부수 발견 3건**: ① **카메라 DELETE 는 라우트만 제거하고 HTTP 리스너는 프로세스 종료까지 리슨을
+    유지한다**(엔진에 리스너 파괴 API 없음) — 같은 인스턴스는 그 포트 재사용 가능하지만 **다른 인스턴스는
+    그 포트를 못 쓴다**. 다중 인스턴스의 카메라 포트 블록은 인스턴스별로 분리할 것.
+    ② 그래서 고정 포트(8287/8288)를 쓰는 계약 테스트를 두 인스턴스에 연달아 돌리면 두 번째가 대량
+    실패한다(간섭이지 결함 아님 — 신규 포트로 스폰 200/CGI 200/DELETE 200 확인). ③ 계약 테스트 2종에
+    "부팅 카메라 존재" 시절 가정이 남아 카메라 0대 부팅에서 각 1건씩 항상 실패한다(`cameras[0]` undefined,
+    "카메라 목록 비어있지 않음") — 테스트 쪽 손질 거리.
+  - 커밋: 서브모듈 `fbfb629`(v0.1.16), 부모 `d77ee12`(포인터+config+run.ps1). Shipping 실증은 다음 패키징 때.
+
+- 2026-08-15: **다중 인스턴스 검토·실측 — A안(프로세스 분리) 유지 확정. Shipping 다중 실행의 정답은 `-UserDir`.**
+  - **질문**: 한 기기에서 시뮬레이터 여러 개 — 포트만 바꿔 프로세스를 분리(A)할지, 한 인스턴스가
+    여러 월드를 관리(B)할지. 구현 없이 검토 + 메모리 실측으로 판정(이교수님 결정: A 유지).
+  - **구조 정리**: 시뮬레이터 본연의 포트는 `ScenePort` 하나다. 카메라 포트는 장치 속성(런타임 스폰은
+    명시 필수)이고, 충돌은 이미 롤백+400 으로 처리된다(`SpawnCameraRuntime` — 같은 인스턴스 내 중복은
+    사전 검사, 타 프로세스 점유는 OS bind 실패로 잡음). B는 UE 에서 멀티 UWorld 가 아니라 "한 월드에
+    주차장 존 복제"만 현실적인데(UGameEngine 은 게임 월드 컨텍스트 1개 상정), 존 API 리팩터링·하늘/시간
+    공유(UDS 월드당 1개)·단일 장애점이 대가다.
+  - **실측**(Shipping v0.2.8 패키지, `LV_Park_sim_01`, 유휴·카메라 0대, 워밍업 90s+, RTX 5060 8GB / RAM 64GB):
+    인스턴스당 **RAM 워킹셋 4.0GB / 커밋 8.8GB / VRAM 2.2GB**. GPU 총량이 1.9(데스크톱)→4.1(1개)→6.4GB(2개)로
+    정확히 +2.2GB 계단 — 공유분 0, 순수 복제 비용. **N=2 여유(6.4/8.15GB), N=3 은 VRAM 초과(~8.6GB)** →
+    이 GPU 의 실용 한도는 2. B 의 이득은 "추가 월드당 VRAM 약 2GB 절약"으로 수치화됨 — 한 GPU 에서
+    월드 3개 이상을 요구하기 전까지는 A 가 이긴다.
+  - **Shipping 다중 실행 레시피(검증 완료)** — 사본 불필요, 같은 `Packaged/Win64` 폴더에서:
+    `baro_unreal.exe -UserDir=D:\sim_inst2` + 사전에 `<UserDir>\baro_unreal\Saved\Config\Windows\Game.ini` 에
+    `[/Script/baroCCTVSimulator.SceneControlSubsystem]` / `ScenePort=8096`. 두 인스턴스가 각각 0.0.0.0:8095/8096
+    으로 리슨함을 확인. `-UserDir` 는 로그·BaroHealth CSV·GameUserSettings 도 인스턴스별로 갈라 준다
+    (기본 Shipping Saved 는 `%LOCALAPPDATA%\baro_unreal\Saved` — 전 인스턴스 공유라 이대로 두면 CSV 가 섞인다. 실측으로 목격).
+  - **안 되는 것 2건(실측 반증)**: ① `-ini:Game:[...]:ScenePort=` 커맨드라인 오버라이드는 **Shipping 에서 컴파일 아웃**
+    (엔진 `ConfigCacheIni.h:57` — `ALLOW_INI_OVERRIDE_FROM_COMMANDLINE = UE_SERVER || !UE_BUILD_SHIPPING`).
+    `DefaultGame.ini` 주석의 "패키징 빌드 포함"은 Development 패키지까지만 참이다. Development·에디터 `-game` 에선
+    정상 동작(스위치 반복 사용 지원 — 엔진 파서가 토큰 단위 처리, 콤마 합치기는 legacy·따옴표와 충돌).
+    ② install 폴더의 `Saved\Config\Windows\Game.ini` 는 Shipping 이 읽지 않는다(Saved 가 LOCALAPPDATA 로 가므로).
+  - **함정 발견**: `ScenePort` 가 충돌하면 두 번째 인스턴스가 깨끗이 실패하지 않는다 — 엔진 HttpServerModule 이
+    재시도하며 **127.0.0.1 로 폴백 바인드** → localhost 요청은 새 인스턴스, LAN 요청은 기존 인스턴스가 받는
+    스플릿-브레인. 로컬 테스트만으로는 안 보인다. 카메라 포트와 달리 엔진 영역이라 포트 계획으로 회피할 것.
+  - `memo.md` 반영은 이 작업 마무리 시점에 하기로 함(이교수님 지시). 실험 산출물(사본·UserDir)은 삭제, 원본 무변경.
+
 - 2026-08-12: **플러그인 v0.1.15 — 카메라 별명(Note)이 액터에 산다. 앱 0.2.8 배포·복원 검증.**
   - **왜**: 스폰 스펙의 `Note` 를 `SetActorLabel` 로만 흘렸는데 액터 라벨은 **에디터 전용**이라
     패키지에서는 남지 않았다 — 이름이 저장되지도, API 로 되읽히지도 않았다. 커미셔닝 콘솔이

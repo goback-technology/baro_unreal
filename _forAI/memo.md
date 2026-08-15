@@ -35,6 +35,24 @@
   → **"MJPEG 은 되는데 CGI 만 원격에서 연결 거부"** 면 라우터·라우트가 아니라 바인드 주소를 의심한다.
   로그는 정상으로 보이고 **localhost 테스트로는 절대 재현되지 않는다**. 판별·회귀는
   `node tools/scene-test/lan-bind-contract.mjs`(루프백 거부) 또는 `netstat -ano | findstr :<port>`.
+- **다중 인스턴스(한 기기에 시뮬 N개, 2026-08-15 실측 검증)**: 시뮬레이터 본연의 포트는 `ScenePort` 하나뿐이라
+  이것만 인스턴스별로 갈면 된다(카메라 0대 시작 기준 — 카메라 포트는 스폰 시 장치 속성이고, 충돌은
+  `SpawnCameraRuntime`이 롤백+400 으로 처리).
+  - **표준 방법(플러그인 v0.1.16~)**: `-ScenePort=8096` 커맨드라인 스위치 — **Shipping 포함 전 빌드 구성
+    동작**, 우선순위 커맨드라인 > `-ini:` > ini. `run.ps1 -ScenePort 8096` 으로도 전달된다.
+    Base 포트도 동일: `-BaseHttpPort=` / `-BaseMjpegPort=`. `ScenePort` 점유 시 인스턴스는 **즉시 종료**한다
+    (원시 소켓 선점 프로브 — 스플릿-브레인 차단, dev_log 2026-08-15).
+  - **카메라 포트 블록은 인스턴스별로 분리할 것**: 카메라 DELETE 는 라우트만 제거하고 HTTP 리스너는
+    프로세스 종료까지 리슨을 유지한다(엔진에 리스너 파괴 API 없음). 같은 인스턴스는 그 포트를 재사용할
+    수 있지만 **다른 인스턴스는 못 쓴다** — baro_calory 인스턴스별 config 의 devices 포트를 겹치지 않게.
+  - **구 배포본(≤ 앱 0.2.8, 플러그인 ≤0.1.15) Shipping 우회**: `-ini:` 가 안 먹는다(아래 「반복 금지」).
+    `-UserDir=D:\sim_inst2` + `<UserDir>\baro_unreal\Saved\Config\Windows\Game.ini` 에 `ScenePort` — 사본 불필요.
+    `-UserDir` 는 v0.1.16 이후에도 로그·BaroHealth CSV·GameUserSettings 인스턴스 분리용으로는 여전히 유용하다
+    (기본 Shipping Saved 는 `%LOCALAPPDATA%\baro_unreal\Saved` — 전 인스턴스 공유).
+  - **인스턴스당 유휴 고정비**(Shipping v0.2.8, sim_01, 카메라 0대): RAM 워킹셋 **4.0GB** / 커밋 8.8GB /
+    VRAM **2.2GB** — 공유분 0, 순수 복제. RTX 5060 8GB 기준 실용 한도 **2개**(3개째는 VRAM 초과).
+    단일 인스턴스 멀티월드(존 복제)안은 월드당 VRAM ~2GB 절약이지만 한 GPU 에 월드 3개+ 요구 전까지는
+    프로세스 분리가 이긴다(A/B 검토·수치 상세: dev_log 2026-08-15).
 - **스트림**: `StreamFps=30`(DefaultGame.ini 오버라이드 — 코드 기본 15), 1280×720 q80. **스냅샷**: QHD 2560×1440 q92, 워밍업 0.
 - **톤**: 노출 -0.7 + **대비 1.2**(DefaultGame.ini `CaptureContrast` — 코드 기본 1.6은 흰 차+직사광에서 "탄" 세피아, 2026-07-02 실측 개정). 라이브 스윕은 `/api/capture-tuning`.
 - **표준 실행**: `./Scripts/run.ps1`(기본 `-Mode Game`) — `.env`의 `UE_PATH`/`DEFAULT_MAP`/`RUN_RESX`/`RUN_RESY`를 읽어 standalone `UnrealEditor.exe <uproject> -game -windowed -ResX=960 -ResY=540`을 띄운다. `GameDefaultMap=/Game/simulator/LV_Park_sim_01`, `GlobalDefaultGameMode=/Script/baro_unreal.BaroUnrealGameMode`(앱 게임모드 — 플러그인 `ABaroSimGameMode` 상속, HUD만 앱 것으로 교체. 구체 폰 없음·월드 렌더 OFF·커서 표시·**ESC 종료**). 완전 무창은 `-RenderOffscreen -log`(-nullrhi 금지 — SceneCapture가 못 돎).
@@ -76,6 +94,22 @@
 - **uproject Plugins 배열에 없다 = 비활성이 아니다.** 프로젝트 로컬 플러그인은 `EnabledByDefault` 미지정 시 **기본 활성**(`FPlugin::IsEnabledByDefault`: Unspecified → `LoadedFrom == Project`). RYU가 여기 해당한다 — 끄려면 `"Enabled": false`를 명시해야 한다.
 - **DefaultGame.ini 의 GameFeatureData 항목은 삭제도, bIsEditorOnly=False 도 금지.** 에디터/쿡은 GameFeatures 플러그인이 로드되어 이 규칙의 존재를 요구(없으면 쿡 실패)하고, 쿡된 게임엔 모듈이 없어 False 면 부팅마다 Ensure → 오류 보고 중 전 스레드 정지로 영구 먹통 가능(2026-07-17 현장 + 07-20 로컬 2회 재현). 정답은 **bIsEditorOnly=True 유지**(쿡은 만족, 게임은 스캔 스킵).
 - **쿡 중 MCP 자동시작 포트 충돌 = 쿡 실패.** 쿡 커맨드릿이 에디터 사용자 설정(`bAutoStartServer=True`)을 읽어 :8000 리슨을 시도한다. 다른 프로세스(VS Code 등)가 8000 을 쥐고 있으면 그 Error 하나로 쿡 전체가 실패 판정된다. 패키징 전 8000 점유 확인, 충돌 시 `Saved/Config/WindowsEditor/EditorPerProjectUserSettings.ini` 의 `bAutoStartServer` 임시 False(패키징 후 복원).
+- **Shipping 에서 config 오버라이드 시도 2가지가 조용히 무시된다**(2026-08-15 실측): ① `-ini:Game:[...]:Key=` 커맨드라인
+  오버라이드는 **Shipping 에서 컴파일 아웃**(엔진 `ConfigCacheIni.h:57` `ALLOW_INI_OVERRIDE_FROM_COMMANDLINE = UE_SERVER || !UE_BUILD_SHIPPING`) —
+  `DefaultGame.ini` 주석의 "패키징 빌드 포함"은 Development 패키지까지만 참이다. ② install 폴더의
+  `Saved\Config\Windows\Game.ini` 도 안 읽힌다 — Shipping 의 Saved 는 `%LOCALAPPDATA%\baro_unreal\Saved` 로 간다.
+  둘 다 에러 없이 기본값으로 뜨므로 "오버라이드가 됐다"고 믿기 쉽다. Shipping 오버라이드는 `-UserDir`
+  경유가 정답(위 「기본 설정값」 다중 인스턴스).
+- **`ScenePort` 가 이미 점유된 채 뜨면 두 번째 인스턴스는 실패하지 않는다 — 127.0.0.1 로 폴백 바인드된다**(2026-08-15 실측,
+  **플러그인 v0.1.16 부터는 선점 프로브 + 즉시 종료로 원천 차단** — 이 함정은 ≤0.1.15 배포본에만 남아 있다).
+  엔진 `FHttpServerModule` 이 0.0.0.0 바인드 실패 후 재시도에서 기본값(localhost)으로 여는 탓 — 결과는
+  **스플릿-브레인**: localhost 요청은 새 인스턴스, LAN 요청은 기존 인스턴스가 받는다. 위 「기본 설정값」의
+  "부팅 첫 리스너 localhost" 함정과 같은 뿌리이며, 역시 **localhost 테스트로는 절대 안 보인다**. 구 배포본
+  다중 실행은 포트 계획으로 회피할 것(`netstat -ano | findstr :<port>` 로 리슨 주소까지 확인).
+  같은 뿌리의 함정 하나 더: **`GetHttpRouter(port, bFailOnBindFailure=true)` 는 부팅 첫 리스너의 점유를 못
+  잡는다** — 실제 바인드가 `StartAllListeners()` 로 미뤄져 라우터가 "유효"하게 돌아오고 "서버 시작" 로그까지
+  정상으로 찍힌다. 부팅 경로에서 포트 점유를 감지하려면 라우터 생성 전에 원시 소켓으로 직접 바인드 프로브를
+  할 것(v0.1.16 `SceneControlSubsystem::StartServer` 참조).
 
 ## 메모리 누수 원인과 대응 (2026-07-20)
 
