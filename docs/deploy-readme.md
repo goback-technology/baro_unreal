@@ -1,6 +1,6 @@
 # baro_unreal CCTV 시뮬레이터 — 배포본 안내 (에이전트용)
 
-> 플러그인 baroCCTVSimulator v0.1.16 기준 · Windows/Win64 · 헤드리스 (정확한 버전은 `/scene/catalog`)
+> 플러그인 baroCCTVSimulator v0.1.17 기준 · Windows/Win64 · 헤드리스 (정확한 버전은 `/scene/catalog`)
 >
 > 이 파일은 배포 zip 루트에 실린다. **에이전트가 이 시뮬을 100% 활용해 작업을 스스로 계획·실행**하도록
 > 전체 기능을 한 장으로 조망한다. 필드 단위의 최신 계약은 런타임 자기서술 API **`GET :8095/scene/help`**
@@ -93,6 +93,17 @@ curl http://$BOX:8095/scene/cameras   # 카메라 목록 + 각자의 hucomsPort�
 
 - **포트 결정 순서**: 커맨드라인 `-ScenePort=8096`(카메라 자동부여 시작값도 `-BaseHttpPort=` /
   `-BaseMjpegPort=`) → 없으면 ini 기본값(8095/8081/8091). Shipping 포함 전 빌드 구성에서 동작.
+- **카메라 포트 구역**(v0.1.17~): `-MaxHttpPort=` / `-MaxMjpegPort=` 로 **상한**을 주면 이 인스턴스는
+  `[BaseHttpPort, MaxHttpPort]` · `[BaseMjpegPort, MaxMjpegPort]` 안에서만 카메라를 연다. 범위 밖
+  포트로 `POST /scene/cameras` 를 부르면 **400**(허용 범위를 메시지에 적어 준다), 자동 부여가 범위를
+  넘으면 그 카메라는 채널을 만들지 않는다(에러 로그). 상한을 안 주면 제한 없음 — 단독 실행은 종전과
+  같다. **지금 이 인스턴스의 구역은 `GET /scene/catalog` 의 `cameraPortRange` 에 있으니 스폰 전에
+  그것부터 읽어라**(상한이 없으면 `httpTo`·`mjpegTo` 가 `null`).
+
+  ```bash
+  baro_unreal.exe -ScenePort=18800 -UserDir=D:\sim\inst1 \
+    -BaseHttpPort=8010 -MaxHttpPort=8020 -BaseMjpegPort=8110 -MaxMjpegPort=8120
+  ```
 - **충돌 = 즉시 종료**: 지정한 `ScenePort` 가 이미 점유돼 있으면 인스턴스는 에러 로그를 남기고 스스로
   종료한다. 따라서 **프로세스가 살아 있으면 포트는 보장된다** — 엉뚱한 포트·localhost 반쪽 기동 같은
   제3의 상태는 없다.
