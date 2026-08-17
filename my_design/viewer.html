@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BARO AI GYM - Geometric Sigil Design Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #07090e;
+      --card-bg: rgba(15, 23, 42, 0.85);
+      --accent-cyan: #00f0ff;
+      --accent-gold: #f59e0b;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --border: rgba(56, 189, 248, 0.2);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text-main);
+      font-family: 'Pretendard', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    header {
+      padding: 1.25rem 2rem;
+      background: linear-gradient(180deg, rgba(14, 23, 42, 0.9) 0%, rgba(7, 9, 14, 0.6) 100%);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      backdrop-filter: blur(10px);
+    }
+
+    .title-group h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.3rem;
+      letter-spacing: 2px;
+      background: linear-gradient(90deg, #00f0ff, #f59e0b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .title-group p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .badge {
+      background: rgba(0, 240, 255, 0.1);
+      border: 1px solid var(--accent-cyan);
+      color: var(--accent-cyan);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 1.5rem;
+      padding: 1.5rem 2rem;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .canvas-container {
+      background: radial-gradient(circle at center, rgba(15, 23, 42, 0.95) 0%, rgba(7, 9, 14, 1) 100%);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      min-height: 620px;
+      box-shadow: 0 0 60px rgba(0, 240, 255, 0.04);
+    }
+
+    .canvas-container::before {
+      content: '';
+      position: absolute;
+      width: 200%;
+      height: 200%;
+      background-image: radial-gradient(circle, rgba(0, 240, 255, 0.06) 1px, transparent 1px);
+      background-size: 32px 32px;
+      pointer-events: none;
+    }
+
+    #sigil-svg-container {
+      width: 550px;
+      height: 550px;
+      position: relative;
+      z-index: 2;
+      filter: drop-shadow(0 0 24px rgba(0, 240, 255, 0.25));
+    }
+
+    #sigil-svg-container svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Rotation Animations */
+    .rotating-cw {
+      animation: spinCW 45s linear infinite;
+      transform-origin: 500px 500px;
+    }
+
+    .rotating-ccw {
+      animation: spinCCW 35s linear infinite;
+      transform-origin: 500px 500px;
+    }
+
+    @keyframes spinCW {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes spinCCW {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(-360deg); }
+    }
+
+    .control-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .card h2 {
+      font-size: 0.9rem;
+      font-family: 'Orbitron', sans-serif;
+      letter-spacing: 1px;
+      color: var(--accent-cyan);
+      margin-bottom: 1rem;
+    }
+
+    .layer-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 0.85rem;
+    }
+
+    .layer-item:last-child {
+      border-bottom: none;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 22px;
+    }
+
+    .switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: .3s;
+      border-radius: 22px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--accent-cyan);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(18px);
+    }
+
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    button.action-btn {
+      background: rgba(14, 165, 233, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #f1f5f9;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      font-family: inherit;
+    }
+
+    button.action-btn:hover {
+      background: rgba(14, 165, 233, 0.25);
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(245, 158, 11, 0.2) 100%) !important;
+      border-color: var(--accent-cyan) !important;
+    }
+
+    .concept-info {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title-group">
+      <h1>BARO AI GYM : SIGIL STUDIO</h1>
+      <p>가상을 현실화하는 AI 에이전트 마법진 대표 원안 (Original Base)</p>
+    </div>
+    <div class="badge">ORIGINAL BASE</div>
+  </header>
+
+  <main>
+    <div class="canvas-container">
+      <div id="sigil-svg-container">
+        <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" viewBox="0 0 1000 1000" id="main-sigil-svg">
+          <!-- Background -->
+          <rect width="1000" height="1000" fill="#0a0e17" />
+
+          <!-- Layer 1: Concentric Rings -->
+          <g id="layer-rings">
+            <circle cx="500" cy="500" r="460" fill="none" stroke="#00f0ff" stroke-width="2.5" />
+            <circle cx="500" cy="500" r="445" fill="none" stroke="#6366f1" stroke-width="1" stroke-dasharray="2,8" />
+            <circle cx="500" cy="500" r="430" fill="none" stroke="#38bdf8" stroke-width="1.5" />
+            <circle cx="500" cy="500" r="415" fill="none" stroke="#1e293b" stroke-width="1" stroke-dasharray="4,4" />
+            <circle cx="500" cy="500" r="380" fill="none" stroke="#00f0ff" stroke-width="2" />
+            <circle cx="500" cy="500" r="235" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6,6" />
+            <circle cx="500" cy="500" r="145" fill="none" stroke="#00f0ff" stroke-width="1.5" />
+            <circle cx="500" cy="500" r="55" fill="none" stroke="#38bdf8" stroke-width="1" />
+          </g>
+
+          <!-- Layer 2: Grid -->
+          <g id="layer-grid">
+            <line x1="500" y1="50" x2="500" y2="950" stroke="#1e293b" stroke-width="1" stroke-dasharray="4,4" />
+            <line x1="50" y1="500" x2="950" y2="500" stroke="#1e293b" stroke-width="1" stroke-dasharray="4,4" />
+            <line x1="183.7" y1="69.1" x2="816.3" y2="930.9" stroke="#1e293b" stroke-width="1" stroke-dasharray="4,4" />
+            <line x1="816.3" y1="69.1" x2="183.7" y2="930.9" stroke="#1e293b" stroke-width="1" stroke-dasharray="4,4" />
+            <line x1="62.1" y1="376.4" x2="937.9" y2="623.6" stroke="#1e293b" stroke-width="1" stroke-dasharray="4,4" />
+            <line x1="937.9" y1="376.4" x2="62.1" y2="623.6" stroke="#1e293b" stroke-width="1" stroke-dasharray="4,4" />
+          </g>
+
+          <!-- Layer 3: Outer Inverted Pentagram -->
+          <g id="layer-inverted">
+            <polygon points="500,880 138.8,617.4 276.6,192.6 723.4,192.6 861.2,617.4" fill="none" stroke="#d97706" stroke-width="1.5" stroke-dasharray="6,6" />
+            <polygon points="500,880 276.6,192.6 861.2,617.4 138.8,617.4 723.4,192.6" fill="none" stroke="#f59e0b" stroke-width="3.5" stroke-linejoin="round" />
+            <circle cx="500" cy="880" r="7" fill="#f59e0b" stroke="#ffffff" stroke-width="1.5" />
+            <circle cx="138.8" cy="617.4" r="7" fill="#f59e0b" stroke="#ffffff" stroke-width="1.5" />
+            <circle cx="276.6" cy="192.6" r="7" fill="#f59e0b" stroke="#ffffff" stroke-width="1.5" />
+            <circle cx="723.4" cy="192.6" r="7" fill="#f59e0b" stroke="#ffffff" stroke-width="1.5" />
+            <circle cx="861.2" cy="617.4" r="7" fill="#f59e0b" stroke="#ffffff" stroke-width="1.5" />
+          </g>
+
+          <!-- Layer 4: Inner Upright Pentagram -->
+          <g id="layer-upright">
+            <polygon points="500,265 723.5,427.4 638.1,689.9 361.9,689.9 276.5,427.4" fill="none" stroke="#0284c7" stroke-width="1.5" />
+            <polygon points="500,265 638.1,689.9 276.5,427.4 723.5,427.4 361.9,689.9" fill="none" stroke="#00f0ff" stroke-width="3.5" stroke-linejoin="round" />
+            <circle cx="500" cy="265" r="6" fill="#00f0ff" stroke="#ffffff" stroke-width="1.5" />
+            <circle cx="723.5" cy="427.4" r="6" fill="#00f0ff" stroke="#ffffff" stroke-width="1.5" />
+            <circle cx="638.1" cy="689.9" r="6" fill="#00f0ff" stroke="#ffffff" stroke-width="1.5" />
+            <circle cx="361.9" cy="689.9" r="6" fill="#00f0ff" stroke="#ffffff" stroke-width="1.5" />
+            <circle cx="276.5" cy="427.4" r="6" fill="#00f0ff" stroke="#ffffff" stroke-width="1.5" />
+          </g>
+
+          <!-- Layer 5: Core Harmony -->
+          <g id="layer-core">
+            <polygon points="500,590 447.1,426.9 585.6,527.6 414.4,527.6 552.9,426.9" fill="none" stroke="#f59e0b" stroke-width="1.8" opacity="0.85" />
+            <circle cx="500" cy="500" r="90" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="8,4" />
+            <circle cx="500" cy="500" r="20" fill="#0f172a" stroke="#38bdf8" stroke-width="2" />
+            <circle cx="500" cy="500" r="6" fill="#00f0ff" />
+            <circle cx="500" cy="500" r="2" fill="#ffffff" />
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="control-panel">
+      <div class="card">
+        <h2>LAYERS & CONTROLS</h2>
+        <div class="layer-item">
+          <span>마법진 외곽 다이얼 링</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-rings" checked onchange="toggleLayer('layer-rings')">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="layer-item">
+          <span>외측 역 펜타그램 (가상 세계)</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-inverted" checked onchange="toggleLayer('layer-inverted')">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="layer-item">
+          <span>내측 정 펜타그램 (현실 실체화)</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-upright" checked onchange="toggleLayer('layer-upright')">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="layer-item">
+          <span>중심 코어 싱귤래리티</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-core" checked onchange="toggleLayer('layer-core')">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="layer-item">
+          <span>기하학 보조선 & 그리드</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-grid" checked onchange="toggleLayer('layer-grid')">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="layer-item">
+          <span>마법진 회전 시뮬레이션</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-anim" onchange="toggleAnimation()">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>ACTIONS</h2>
+        <div class="btn-group">
+          <button class="action-btn btn-primary" onclick="downloadSVG()">SVG 다운로드</button>
+          <button class="action-btn" onclick="copySVGCode()">SVG 코드 복사</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>SYMBOL PHILOSOPHY</h2>
+        <p class="concept-info">
+          • <strong>외측 역 펜타그램(골드)</strong>: 가상 시뮬레이션 환경(Gym)<br>
+          • <strong>내측 정 펜타그램(시안)</strong>: 에이전트의 지능과 현실 실체화<br>
+          • <strong>동심원 마법진 링</strong>: 상태-행동-보상 관측 루프
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    function toggleLayer(layerId) {
+      const el = document.getElementById(layerId);
+      if (el) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+      }
+    }
+
+    function toggleAnimation() {
+      const animChecked = document.getElementById('toggle-anim').checked;
+      const inv = document.getElementById('layer-inverted');
+      const up = document.getElementById('layer-upright');
+      const rings = document.getElementById('layer-rings');
+
+      if (animChecked) {
+        if(inv) inv.classList.add('rotating-cw');
+        if(up) up.classList.add('rotating-ccw');
+        if(rings) rings.classList.add('rotating-cw');
+      } else {
+        if(inv) inv.classList.remove('rotating-cw');
+        if(up) up.classList.remove('rotating-ccw');
+        if(rings) rings.classList.remove('rotating-cw');
+      }
+    }
+
+    function downloadSVG() {
+      const svg = document.getElementById('main-sigil-svg');
+      const serializer = new XMLSerializer();
+      let source = serializer.serializeToString(svg);
+      
+      if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+        source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+      }
+      
+      const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "baro_gym_sigil_original.svg";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    function copySVGCode() {
+      const svg = document.getElementById('main-sigil-svg');
+      const serializer = new XMLSerializer();
+      const source = serializer.serializeToString(svg);
+      navigator.clipboard.writeText(source).then(() => {
+        alert("SVG 소스코드가 클립보드에 복사되었습니다!");
+      });
+    }
+  </script>
+</body>
+</html>
