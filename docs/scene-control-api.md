@@ -121,6 +121,10 @@ ParkingSlotClassPrefix=BP_ParkingSlot
 {
   "level": "LV_Park_sim_01",
   "pluginVersion": "0.1.8",
+  "cameraPortRange": {                 // v0.1.17~. 상한이 없으면 to 가 null
+    "httpFrom": 8081, "httpTo": 8091,
+    "mjpegFrom": 8181, "mjpegTo": 8191
+  },
   "carCount": 23,
   "cars": [
     {
@@ -144,6 +148,11 @@ ParkingSlotClassPrefix=BP_ParkingSlot
 
 - `pluginVersion`은 `.uplugin`의 `VersionName`을 `IPluginManager`로 런타임 조회한 값 — 배포된 빌드가
   어느 플러그인인지 즉시 식별(웹 `/simulator` 씬 카드에 표시됨).
+- `cameraPortRange`(v0.1.17~)는 **이 인스턴스가 카메라에 쓸 수 있는 포트 구역**이다. 한 기기에
+  인스턴스를 여러 개 띄울 때 서로의 포트를 밟지 않도록 기동 인자
+  (`-BaseHttpPort=`/`-MaxHttpPort=`, `-BaseMjpegPort=`/`-MaxMjpegPort=`)로 나눠 준다.
+  **범위 밖 포트로 카메라를 스폰하면 `400`** 이고, 자동 부여도 범위를 넘으면 그 카메라는
+  채널을 만들지 않는다. 상한을 주지 않으면(`to: null`) 제한 없이 옛 동작 그대로다.
 - `cars[]`는 **v0.1.2부터** `BP_Car.Mesh_List` CDO 리플렉션으로 채워진다. `carCount`는 그 길이이며
   구 계약을 그대로 유지한다(리플렉션 실패 시에만 과거 상수 23으로 폴백하고 `cars[]`는 비어 나간다).
   UE와 baro_calory 모두 이 `carCount`를 입력 범위의 진실로 사용하므로 차종을 하드코딩하지 말 것.
@@ -275,6 +284,9 @@ POST /scene/cameras
 - `location` = 광학중심 월드 cm(레버암 0), `yawDeg` 기본 0, `pitchDeg` 기본 -20(음수 = 하향 —
   config 스포너와 같은 규약으로 **tilt 로 이관**되어 롤이 생기지 않는다).
 - **포트 명시 필수**(자동 부여는 열거순 비결정이라 불허). 씬 포트·기존 채널과 겹치면 `400` + 원인.
+- **구역 밖이면 `400`**(v0.1.17~). 이 인스턴스에 포트 상한이 걸려 있으면 `[BaseHttpPort, MaxHttpPort]`
+  · `[BaseMjpegPort, MaxMjpegPort]` 밖의 포트를 거부하고, 허용 범위를 에러 메시지에 적어 준다.
+  쓸 수 있는 구역은 `GET /scene/catalog` 의 `cameraPortRange` 에서 미리 읽는다.
 - 스폰 즉시 그 포트의 Hucoms CGI(getptzfpos·jpeg.cgi)와 MJPEG 가 산다(리스너 런타임 증설).
   응답 `{ camera: {...} }` 는 GET 목록 항목과 동일 shape.
 - `GET /scene/cameras` 각 항목에 `spawned`(bool, v0.1.13) 추가 — true 인 카메라만 이동·삭제 가능.

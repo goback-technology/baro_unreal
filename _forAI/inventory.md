@@ -35,7 +35,7 @@
 - `Plugins/baroCCTVSimulator/` — **git submodule**(CCTV 런타임 C++ 단일 소스). 아래 [Submodule 운영](#submodule-운영) 참조.
 - `Plugins/RYUKoreaBuilidngCreator/` — 한국 건물팩(Fab 상용, 콘텐츠 2.6GB + Runtime C++ 모듈, 5.8 재빌드됨). git 미추적.
 - `Content/` — parking_area에서 이관한 30GB 환경. 시뮬 레벨 `simulator/LV_Park_sim_01~03`, 원본 `Levels/LV_Park_01~08`, 대형 에셋팩(BlackAlder/Fab/Cars/Road_Creator_Pro/UltraDynamicSky). git 미추적.
-- `Config/` — 5개 파일: `DefaultEditor.ini`, `DefaultEngine.ini`(RHI·맵·게임모드·`[HTTPServer.Listeners]` + **`r.Lumen.HardwareRayTracing=True`** — 캡처 persist 가드와 짝, memo 「메모리 누수 원인과 대응」), `DefaultGame.ini`(플러그인 서브시스템 설정 + `[GeneralProjectSettings] ProjectVersion` = **앱 버전**, 현 **0.2.9**(배포 zip 이름의 출처 — `Scripts/package.ps1 -Zip`) + AssetManager **GameFeatureData 항목 bIsEditorOnly=True 필수** — memo 「반복 금지」), `DefaultGameUserSettings.ini`(배포 기본 960×540 일반 창모드 `FullscreenMode=2` + Epic 품질·`sg.ResolutionQuality=100`), `DefaultInput.ini`(창모드 고정을 위해 `bAltEnterTogglesFullscreen=False` / `bF11TogglesFullscreen=False`).
+- `Config/` — 5개 파일: `DefaultEditor.ini`, `DefaultEngine.ini`(RHI·맵·게임모드·`[HTTPServer.Listeners]` + **`r.Lumen.HardwareRayTracing=True`** — 캡처 persist 가드와 짝, memo 「메모리 누수 원인과 대응」), `DefaultGame.ini`(플러그인 서브시스템 설정 + `[GeneralProjectSettings] ProjectVersion` = **앱 버전**, 현 **0.2.10**(배포 zip 이름의 출처 — `Scripts/package.ps1 -Zip`) + AssetManager **GameFeatureData 항목 bIsEditorOnly=True 필수** — memo 「반복 금지」), `DefaultGameUserSettings.ini`(배포 기본 960×540 일반 창모드 `FullscreenMode=2` + Epic 품질·`sg.ResolutionQuality=100`), `DefaultInput.ini`(창모드 고정을 위해 `bAltEnterTogglesFullscreen=False` / `bF11TogglesFullscreen=False`).
   - MCP 자동시작은 `Saved/Config/.../EditorPerProjectUserSettings.ini`(git 미추적). ⚠ 쿡 중 :8000 점유 프로세스가 있으면 쿡이 실패한다(memo 「반복 금지」).
 - `Scripts/` — `common.ps1`(.env 로더 + `Get-BaroSetting`/`Assert-BaroFile` 헬퍼), `build.ps1`, `run.ps1`, `package.ps1`.
 - `tools/scene-test/` — `/scene/*` 계약 검증 하네스(node, 의존성 0, 소비 저장소 무접촉): `offset-contract.mjs`(배치 변형 수치·동작), `camera-snapshot-contract.mjs`(카메라 생명주기·스냅샷 왕복 33항목), `lan-bind-contract.mjs`(리스너 LAN 바인딩 — **루프백 주소를 거부**하므로 배포 검증은 이걸로 한다: `--host <배포기IP>`), `jitter-demo.mjs`(offset A/B 데모 씬). 전부 실행 중 sim 필요.
@@ -63,7 +63,7 @@
   **옛 위치에 새 저장소나 fork 가 생기면 리다이렉트가 영구 삭제된다**는 GitHub 사양이 문제였다.
   개인 계정으로 fork 만 떠도 같은 이름(`gbox3d/baroCCTVSimulator`)에 안착해 끊기고, 그 뒤 새 클론은
   **에러 없이 조용히 fork 를 추적**한다. `baroQuantum` 도 같은 날 함께 교체했다.)
-- 현재 핀: `2fa38c0`(heads/main, `.uplugin` VersionName **0.1.16** — 포트 커맨드라인 스위치 3종+즉시 종료 `fbfb629` + `/scene/help` 기동 계약 docs-only `2fa38c0`).
+- 현재 핀: `835ac5b`(heads/main, `.uplugin` VersionName **0.1.17** — 카메라 포트 구역. 그전 **0.1.16** — 포트 커맨드라인 스위치 3종+즉시 종료 `fbfb629` + `/scene/help` 기동 계약 docs-only `2fa38c0`).
 - URL 을 바꿀 때는 **3계층을 모두** 맞춰야 한다 — `.gitmodules`(추적됨) / `.git/config`(로컬) / 서브모듈 자신의 `origin`.
   `git config -f .gitmodules submodule.<path>.url <새주소>` 뒤 **`git submodule sync --recursive`** 를 돌리면 나머지 둘이 따라온다.
 - 클론 직후 필수: `git submodule update --init --recursive` (빠뜨리면 플러그인 없이 열려 CCTV 전부 실종)
