@@ -11,6 +11,23 @@
 > 각 엔트리는 그 시점의 스냅샷이다 — 나중에 사실이 바뀌어도 과거 엔트리는 고쳐 쓰지 않고,
 > 최신 엔트리에서 정정한다.
 
+- 2026-08-19: **플러그인 v0.1.14~0.1.17 을 GitHub 에 push. 이 저장소가 `baroQuantum` 의 레퍼런스 호스트가 됐다.**
+  - 이교수님이 `baroQuantum` 최신화를 지시하며 **"`baro_unreal` 이 이것용 예제 파일입니다, 똑같이
+    해야 합니다"** 라고 못박았다. 그래서 그쪽을 이 저장소에 맞추는 작업을 했고, 그 과정에서
+    **이쪽 플러그인 커밋 6개(v0.1.14~v0.1.17 + 자동 카메라 기본값 off)가 로컬에만 있었다**는 것이
+    드러났다 — `origin/main` 은 v0.1.13(`58b7835`)에 머물러 있었다. 두 호스트가 같은 커밋을
+    가리키는데 원격에 없으니, **새로 클론하면 양쪽 다 서브모듈 핀이 해석되지 않는 상태**였다.
+    `58b7835..b07bb8c` push 로 해소. 이 저장소의 워킹트리·핀은 바뀐 것이 없다.
+  - `baroQuantum` 쪽에 옮긴 것: 플러그인 핀 `b07bb8c`, `DefaultGame.ini` 전량(포트·광학·슬루·
+    캡처·생명주기), `r.Lumen.HardwareRayTracing=True`, RT 풀 1600MB, GameFeatureData
+    `bIsEditorOnly=True` 가드, `DefaultGameUserSettings.ini`, `DefaultInput.ini` 창모드 4키,
+    MCP·AllToolsets Editor 전용화, 콘텐츠 최소 세트 101 파일 788MB(레벨 제외).
+    **주석을 걷어낸 `DefaultGame.ini` diff 가 `ProjectID`+`ProjectVersion` 한 덩어리만 남는다.**
+  - 그쪽에서 확인된 것 중 이쪽에도 의미 있는 것: `C:\works\ue_prjs\baroCCTVSimulator` 는 플러그인
+    문서(`INTEGRATION.md`·`README.md`)가 "단일 소스" 라 부르지만 **2026-07-03 에 버려진 스텁**
+    (VersionName "1.0")이다. 진짜 소스는 두 호스트의 서브모듈이고, 둘 다 0.1.17 이다.
+    또 플러그인 서브모듈의 `_forAI/memo.md` 가 버전을 0.1.10 이라 적고 있다(`.uplugin` 이 진실).
+  - 상세는 `baroQuantum/_forAI/dev_log.md` 2026-08-19 엔트리 두 개.
 - 2026-08-15: **플러그인 v0.1.16 — 포트 커맨드라인 스위치 3종(`-ScenePort`/`-BaseHttpPort`/`-BaseMjpegPort`). ScenePort 점유는 즉시 종료.**
   - **왜**: 아래 엔트리(같은 날)의 실측으로 Shipping 에서 포트를 지정할 방법이 없음이 확인됐다.
     A안(프로세스 분리) 운영의 전제라 이교수님 결정으로 구현(스위치 셋 다 + 충돌 시 즉시 종료).

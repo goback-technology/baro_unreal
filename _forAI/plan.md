@@ -35,9 +35,12 @@
 - [ ] **배포본을 Shipping 으로 전환 (이제 착수 가능, 다음 관문).** soak 가 누수 없음을 확인했으므로 로그·
       `BaroHealth-*.csv` 감시 목적의 Development 는 소임을 다했다. Shipping 은 `ensure` 가 컴파일 아웃돼
       이상을 숨기니, 48h 완주로 Crashes 공란까지 확정한 **뒤** `./Scripts/package.ps1 -Config Shipping -Zip`.
-- [ ] **`baroQuantum` 플러그인 핀 갱신 검토** — 현재 `9a52a22`(v0.1.5 = 암부 화질 회귀가 있는 폐기 버전)에
-      묶여 있다. v0.1.6 으로 올리려면 그쪽 `DefaultEngine.ini` 에도 `r.Lumen.HardwareRayTracing=True` 가
-      필요하다(없으면 가드가 persist 를 꺼 v0.1.5 와 같은 화질이 된다 — 누수는 없음). 별건·이교수님 판단.
+- [x] ~~**`baroQuantum` 플러그인 핀 갱신 검토**~~ — **완료(2026-08-19, 이교수님 지시 "예제와 똑같이").**
+      `9a52a22`(v0.1.5) → **`b07bb8c`(v0.1.17)** 로 올렸고 `r.Lumen.HardwareRayTracing=True` 도 함께
+      넣어 화질 모드가 실제로 켜지게 했다. 그쪽 `DefaultGame.ini` 전량과 RT 풀 1600MB, 콘텐츠 최소
+      세트(차량 23종·주차면 BP·번호판·주차선 101 파일)까지 이관. **이 저장소가 그 프로젝트의
+      레퍼런스 호스트로 지정됐다** — 상세는 `baroQuantum/_forAI/dev_log.md` 2026-08-19.
+      그 과정에서 이쪽 플러그인 미푸시 커밋 6개(v0.1.14~0.1.17)를 GitHub 에 push 했다.
 
 - [x] **/scene API 확장 — 플러그인 v0.1.7 구현 완료(응용 SW팀 요청 접수 2026-07-23)**:
       차종별 실제 치수, 카메라 기준면 높이, zoom→HFOV 화각표를 기존 응답에 하위 호환 필드로 추가한다.

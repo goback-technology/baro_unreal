@@ -63,7 +63,12 @@
   **옛 위치에 새 저장소나 fork 가 생기면 리다이렉트가 영구 삭제된다**는 GitHub 사양이 문제였다.
   개인 계정으로 fork 만 떠도 같은 이름(`gbox3d/baroCCTVSimulator`)에 안착해 끊기고, 그 뒤 새 클론은
   **에러 없이 조용히 fork 를 추적**한다. `baroQuantum` 도 같은 날 함께 교체했다.)
-- 현재 핀: `835ac5b`(heads/main, `.uplugin` VersionName **0.1.17** — 카메라 포트 구역. 그전 **0.1.16** — 포트 커맨드라인 스위치 3종+즉시 종료 `fbfb629` + `/scene/help` 기동 계약 docs-only `2fa38c0`).
+- 현재 핀: `b07bb8c`(heads/main, `.uplugin` VersionName **0.1.17** — `835ac5b` 카메라 포트 구역 +
+  자동 카메라 생성 기본값 off. 그전 **0.1.16** — 포트 커맨드라인 스위치 3종+즉시 종료 `fbfb629` +
+  `/scene/help` 기동 계약 docs-only `2fa38c0`).
+  **2026-08-19 에 `origin/main` 으로 push 완료**(`58b7835..b07bb8c`) — 그전까지 v0.1.14~0.1.17 여섯
+  커밋이 로컬에만 있어서, 이 저장소를 새로 클론하면 서브모듈 핀이 해석되지 않는 상태였다.
+  `baroQuantum` 도 같은 커밋을 물고 있다.
 - URL 을 바꿀 때는 **3계층을 모두** 맞춰야 한다 — `.gitmodules`(추적됨) / `.git/config`(로컬) / 서브모듈 자신의 `origin`.
   `git config -f .gitmodules submodule.<path>.url <새주소>` 뒤 **`git submodule sync --recursive`** 를 돌리면 나머지 둘이 따라온다.
 - 클론 직후 필수: `git submodule update --init --recursive` (빠뜨리면 플러그인 없이 열려 CCTV 전부 실종)
